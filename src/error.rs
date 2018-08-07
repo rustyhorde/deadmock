@@ -9,6 +9,8 @@
 //! `deadmock` errors
 error_chain!{
     foreign_links {
+        AddrParse(::std::net::AddrParseError);
+        Fmt(::std::fmt::Error);
         Io(::std::io::Error);
         TomlEnv(::tomlenv::Error);
     }

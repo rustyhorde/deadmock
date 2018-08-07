@@ -7,31 +7,49 @@
 // modified, or distributed except according to those terms.
 
 //! `deadmock` environment config
+use std::env;
 use std::fmt;
 
 /// The runtime environment for deadmock.
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Default,
-    Deserialize,
-    Getters,
-    Hash,
-    Eq,
-    Ord,
-    PartialEq,
-    PartialOrd,
-    Serialize,
-)]
-pub struct Env {
+#[derive(Clone, Copy, Debug, Default, Deserialize, Getters, Hash, Eq, PartialEq, Serialize)]
+pub struct Env<'a> {
+    /// The IP address to listen on.
+    #[get = "pub"]
+    ip: Option<&'a str>,
     /// The port to listen on.
     #[get = "pub"]
-    port: u32,
+    port: Option<u32>,
+    /// Log level filter.
+    #[get = "pub"]
+    level: Option<&'a str>,
 }
 
-impl fmt::Display for Env {
+fn write_opt<T: fmt::Display + fmt::Debug>(
+    f: &mut fmt::Formatter,
+    key: &str,
+    opt: Option<T>,
+) -> fmt::Result {
+    if let Some(val) = opt {
+        write!(f, "{}: {}, ", key, val)?
+    };
+    Ok(())
+}
+
+impl<'a> fmt::Display for Env<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Env {{ port: {} }}", self.port)
+        write!(f, "Env {{ ")?;
+        write_opt(f, "ip", self.ip).map_err(|_| fmt::Error)?;
+        write_opt(f, "port", self.port).map_err(|_| fmt::Error)?;
+        write_opt(f, "level", self.level).map_err(|_| fmt::Error)?;
+        write!(f, "}}")
+    }
+}
+
+impl<'a> Env<'a> {
+    pub fn get_env_var() -> String {
+        env::var("env").unwrap_or_else(|_| {
+            env::set_var("env", "local");
+            "local".to_string()
+        })
     }
 }

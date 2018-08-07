@@ -14,13 +14,23 @@ extern crate error_chain;
 extern crate getset;
 #[macro_use]
 extern crate serde_derive;
+#[macro_use]
+extern crate slog;
 
+extern crate bytes;
 extern crate clap;
+extern crate http;
+extern crate httparse;
 extern crate serde;
+extern crate slog_async;
+extern crate slog_term;
+extern crate tokio;
+extern crate tokio_codec;
 extern crate tomlenv;
 
 mod environment;
 mod error;
+mod http;
 mod run;
 
 use std::io::{self, Write};
