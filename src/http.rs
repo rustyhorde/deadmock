@@ -8,15 +8,31 @@
 
 //! `deadmock` HTTP encoder/decoder.
 use bytes::BytesMut;
-use http;
-use http::header::HeaderValue;
-use http::{Request, Response};
+use chrono::Utc;
+use http_types::header::HeaderValue;
+use http_types::{Request, Response, Version};
 use httparse;
 use std::fmt;
 use std::io;
-use tokio_codec::{Encoder, Decoder};
+use tokio_io::codec::{Decoder, Encoder};
 
-struct Http;
+pub struct Http;
+
+// Right now `write!` on `Vec<u8>` goes through io::Write and is not
+// super speedy, so inline a less-crufty implementation here which
+// doesn't go through io::Error.
+struct BytesWrite<'a>(&'a mut BytesMut);
+
+impl<'a> fmt::Write for BytesWrite<'a> {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        self.0.extend_from_slice(s.as_bytes());
+        Ok(())
+    }
+
+    fn write_fmt(&mut self, args: fmt::Arguments) -> fmt::Result {
+        fmt::write(self, args)
+    }
+}
 
 /// Implementation of encoding an HTTP response into a `BytesMut`, basically
 /// just writing out an HTTP/1.1 response.
@@ -27,12 +43,18 @@ impl Encoder for Http {
     fn encode(&mut self, item: Response<String>, dst: &mut BytesMut) -> io::Result<()> {
         use std::fmt::Write;
 
-        write!(BytesWrite(dst), "\
-            HTTP/1.1 {}\r\n\
-            Server: Example\r\n\
-            Content-Length: {}\r\n\
-            Date: {}\r\n\
-        ", item.status(), item.body().len(), date::now()).unwrap();
+        write!(
+            BytesWrite(dst),
+            "\
+             HTTP/1.1 {}\r\n\
+             Server: Example\r\n\
+             Content-Length: {}\r\n\
+             Date: {}\r\n\
+             ",
+            item.status(),
+            item.body().len(),
+            Utc::now()
+        ).unwrap();
 
         for (k, v) in item.headers() {
             dst.extend_from_slice(k.as_str().as_bytes());
@@ -44,23 +66,7 @@ impl Encoder for Http {
         dst.extend_from_slice(b"\r\n");
         dst.extend_from_slice(item.body().as_bytes());
 
-        return Ok(());
-
-        // Right now `write!` on `Vec<u8>` goes through io::Write and is not
-        // super speedy, so inline a less-crufty implementation here which
-        // doesn't go through io::Error.
-        struct BytesWrite<'a>(&'a mut BytesMut);
-
-        impl<'a> fmt::Write for BytesWrite<'a> {
-            fn write_str(&mut self, s: &str) -> fmt::Result {
-                self.0.extend_from_slice(s.as_bytes());
-                Ok(())
-            }
-
-            fn write_fmt(&mut self, args: fmt::Arguments) -> fmt::Result {
-                fmt::write(self, args)
-            }
-        }
+        Ok(())
     }
 }
 
@@ -101,33 +107,36 @@ impl Decoder for Http {
                 headers[i] = Some((k, v));
             }
 
-            (toslice(r.method.unwrap().as_bytes()),
-             toslice(r.path.unwrap().as_bytes()),
-             r.version.unwrap(),
-             amt)
+            (
+                toslice(r.method.unwrap().as_bytes()),
+                toslice(r.path.unwrap().as_bytes()),
+                r.version.unwrap(),
+                amt,
+            )
         };
         if version != 1 {
-            return Err(io::Error::new(io::ErrorKind::Other, "only HTTP/1.1 accepted"))
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "only HTTP/1.1 accepted",
+            ));
         }
         let data = src.split_to(amt).freeze();
-        let mut ret = Request::builder();
-        ret.method(&data[method.0..method.1]);
-        ret.uri(data.slice(path.0, path.1));
-        ret.version(http::Version::HTTP_11);
-        for header in headers.iter() {
+        let mut request = Request::builder();
+        request.method(&data[method.0..method.1]);
+        request.uri(data.slice(path.0, path.1));
+        request.version(Version::HTTP_11);
+        for header in &headers {
             let (k, v) = match *header {
                 Some((ref k, ref v)) => (k, v),
                 None => break,
             };
-            let value = unsafe {
-                HeaderValue::from_shared_unchecked(data.slice(v.0, v.1))
-            };
-            ret.header(&data[k.0..k.1], value);
+            let value = unsafe { HeaderValue::from_shared_unchecked(data.slice(v.0, v.1)) };
+            request.header(&data[k.0..k.1], value);
         }
 
-        let req = ret.body(()).map_err(|e| {
-            io::Error::new(io::ErrorKind::Other, e)
-        })?;
+        let req = request
+            .body(())
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
         Ok(Some(req))
     }
 }

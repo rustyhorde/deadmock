@@ -18,14 +18,17 @@ extern crate serde_derive;
 extern crate slog;
 
 extern crate bytes;
+extern crate chrono;
 extern crate clap;
-extern crate http;
+extern crate http as http_types;
 extern crate httparse;
 extern crate serde;
+extern crate serde_json;
 extern crate slog_async;
 extern crate slog_term;
 extern crate tokio;
 extern crate tokio_codec;
+extern crate tokio_io;
 extern crate tomlenv;
 
 mod environment;
