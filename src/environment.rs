@@ -19,9 +19,9 @@ pub struct Env<'a> {
     /// The port to listen on.
     #[get = "pub"]
     port: Option<u32>,
-    /// Log level filter.
+    /// The path to the mappings and templates
     #[get = "pub"]
-    level: Option<&'a str>,
+    path: Option<&'a str>,
 }
 
 fn write_opt<T: fmt::Display + fmt::Debug>(
@@ -40,7 +40,7 @@ impl<'a> fmt::Display for Env<'a> {
         write!(f, "Env {{ ")?;
         write_opt(f, "ip", self.ip).map_err(|_| fmt::Error)?;
         write_opt(f, "port", self.port).map_err(|_| fmt::Error)?;
-        write_opt(f, "level", self.level).map_err(|_| fmt::Error)?;
+        write_opt(f, "path", self.path).map_err(|_| fmt::Error)?;
         write!(f, "}}")
     }
 }

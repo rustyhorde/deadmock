@@ -38,22 +38,20 @@ pub fn run() -> Result<i32> {
                 .short("v")
                 .long("verbose")
                 .multiple(true)
-                .long_help(
-                    "Set the logging verbosity
-Note: This will override a log level defined in your environment config",
-                ),
+                .help("Set the logging verbosity"),
         ).arg(
-            Arg::with_name("config")
-                .short("c")
-                .long("config")
-                .help("Specify the config file location"),
+            Arg::with_name("env_path")
+                .short("e")
+                .long("envpath")
+                .help("Specify the env file path"),
         ).get_matches();
 
     // Setup the environment.
     let dm_env = Env::get_env_var();
     let mut buffer = String::new();
+    let env_path = matches.value_of("env_path").unwrap_or_else(|| "env.toml");
     let envs: Environments<Environment, Env> =
-        Environments::from_path(Path::new("env.toml"), &mut buffer)?;
+        Environments::from_path(Path::new(env_path), &mut buffer)?;
     let current = envs.current()?;
 
     // Setup the logging.
@@ -75,28 +73,31 @@ Note: This will override a log level defined in your environment config",
         .build()
         .filter_level(Level::Error)
         .fuse();
-    let _stderr = Logger::root(
+    let stderr = Logger::root(
         stderr_async_drain,
         o!(env!("CARGO_PKG_NAME") => env!("CARGO_PKG_VERSION")),
     );
 
-    // Parse the arguments, bind the TCP socket we'll be listening to, spin up
-    // our worker threads, and start shipping sockets to those worker threads.
     let ip = current.ip().unwrap_or("127.0.0.1");
     let port = current.port().unwrap_or(32276);
     let addr = format!("{}:{}", ip, port);
     let socket_addr = addr.parse::<SocketAddr>()?;
-
     let listener = TcpListener::bind(&socket_addr)?;
 
     info!(stdout, "Runtime Environment: {}", dm_env);
     info!(stdout, "{}", current);
     info!(stdout, "Listening on '{}'", socket_addr);
+    info!(
+        stdout,
+        "Build Timestamp: {}",
+        env!("VERGEN_BUILD_TIMESTAMP")
+    );;
+    info!(stdout, "Build Date: {}", env!("VERGEN_BUILD_DATE"));
 
     tokio::run({
         listener
             .incoming()
-            .map_err(|e| println!("failed to accept socket; error = {:?}", e))
+            .map_err(move |e| error!(stderr, "failed to accept socket: {}", e))
             .for_each(|socket| {
                 process(socket);
                 Ok(())

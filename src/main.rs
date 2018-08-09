@@ -34,6 +34,7 @@ extern crate tomlenv;
 mod environment;
 mod error;
 mod http;
+mod matcher;
 mod run;
 
 use std::io::{self, Write};
