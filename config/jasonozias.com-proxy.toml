@@ -1,0 +1,8 @@
+priority = 1
+
+[request]
+method = "GET"
+url = "jasonozias.com"
+
+[response]
+proxy-base-url = "jasonozias.com"
