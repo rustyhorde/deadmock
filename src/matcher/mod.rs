@@ -7,11 +7,26 @@
 // modified, or distributed except according to those terms.
 
 //! `deadmock` configuration
+use std::collections::HashMap;
+
 mod request;
 mod response;
 
 pub use self::request::Request;
 pub use self::response::Response;
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, Getters, PartialEq, Serialize)]
+pub struct Mappings {
+    mappings: HashMap<String, Matcher>,
+}
+
+impl Mappings {
+    pub fn new() -> Self {
+        Self {
+            mappings: HashMap::new(),
+        }
+    }
+}
 
 #[derive(Copy, Clone, Debug, Default, Deserialize, Eq, Getters, Hash, PartialEq, Serialize)]
 pub struct Matcher {

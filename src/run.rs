@@ -10,27 +10,26 @@
 use clap::{App, Arg};
 use environment::Env;
 use error::Result;
-use http::Http;
-use http_types::{Request, Response, StatusCode};
-use serde_json;
+use handler::Handler;
+use header;
+use matcher::Mappings;
 use slog::{Drain, Level, Logger};
 use slog_async::Async;
 use slog_term::{CompactFormat, TermDecorator};
-use std::io;
 use std::net::SocketAddr;
 use std::path::Path;
-
+use std::sync::{Arc, Mutex};
 use tokio;
-use tokio::net::{TcpListener, TcpStream};
-use tokio::prelude::{future, Future, Sink, Stream};
-use tokio_codec::Decoder;
-
+use tokio::net::TcpListener;
+use tokio::prelude::Stream;
 use tomlenv::{Environment, Environments};
 
 /// CLI Runtime
 pub fn run() -> Result<i32> {
+    header::header();
+
     let matches = App::new(env!("CARGO_PKG_NAME"))
-        .version(env!("CARGO_PKG_VERSION"))
+        .version(env!("VERGEN_SEMVER"))
         .author(env!("CARGO_PKG_AUTHORS"))
         .about("Proxy server for hosting mocked responses on match criteria")
         .arg(
@@ -65,7 +64,10 @@ pub fn run() -> Result<i32> {
     let stdout_decorator = TermDecorator::new().stdout().build();
     let stdout_drain = CompactFormat::new(stdout_decorator).build().fuse();
     let stdout_async_drain = Async::new(stdout_drain).build().filter_level(level).fuse();
-    let stdout = Logger::root(stdout_async_drain, o!());
+    let stdout = Logger::root(
+        stdout_async_drain,
+        o!(env!("CARGO_PKG_NAME") => env!("VERGEN_SEMVER"), "env" => dm_env.clone()),
+    );
 
     let stderr_decorator = TermDecorator::new().stdout().build();
     let stderr_drain = CompactFormat::new(stderr_decorator).build().fuse();
@@ -75,88 +77,43 @@ pub fn run() -> Result<i32> {
         .fuse();
     let stderr = Logger::root(
         stderr_async_drain,
-        o!(env!("CARGO_PKG_NAME") => env!("CARGO_PKG_VERSION")),
+        o!(env!("CARGO_PKG_NAME") => env!("VERGEN_SEMVER"), "env" => dm_env.clone()),
     );
 
+    // Load up the static mappings.
+    let mappings = Mappings::new();
+
+    let state = Arc::new(Mutex::new(mappings));
+
+    // Setup the listener.
     let ip = current.ip().unwrap_or("127.0.0.1");
     let port = current.port().unwrap_or(32276);
     let addr = format!("{}:{}", ip, port);
     let socket_addr = addr.parse::<SocketAddr>()?;
     let listener = TcpListener::bind(&socket_addr)?;
 
-    info!(stdout, "Runtime Environment: {}", dm_env);
-    info!(stdout, "{}", current);
+    trace!(stdout, "{}", current);
     info!(stdout, "Listening on '{}'", socket_addr);
-    info!(
-        stdout,
-        "Build Timestamp: {}",
-        env!("VERGEN_BUILD_TIMESTAMP")
-    );;
-    info!(stdout, "Build Date: {}", env!("VERGEN_BUILD_DATE"));
+
+    // Setup logging clones to move into handlers.
+    let map_err_stderr = stderr.clone();
+    let process_stderr = stderr.clone();
+    let process_stdout = stdout.clone();
 
     tokio::run({
         listener
             .incoming()
-            .map_err(move |e| error!(stderr, "failed to accept socket: {}", e))
-            .for_each(|socket| {
-                process(socket);
+            .map_err(move |e| error!(map_err_stderr, "failed to accept socket: {}", e))
+            .for_each(move |socket| {
+                header::socket_info(&socket, &process_stdout);
+
+                Handler::new(socket, state.clone())
+                    .stdout(process_stdout.clone())
+                    .stderr(process_stderr.clone())
+                    .handle();
                 Ok(())
             })
     });
 
     Ok(0)
-}
-
-fn process(socket: TcpStream) {
-    let (tx, rx) =
-        // Frame the socket using the `Http` protocol. This maps the TCP socket
-        // to a Stream + Sink of HTTP frames.
-        Http.framed(socket)
-        // This splits a single `Stream + Sink` value into two separate handles
-        // that can be used independently (even on different tasks or threads).
-        .split();
-
-    // Map all requests into responses and send them back to the client.
-    let task = tx.send_all(rx.and_then(respond)).then(|res| {
-        if let Err(e) = res {
-            println!("failed to process connection; error = {:?}", e);
-        }
-
-        Ok(())
-    });
-
-    // Spawn the task that handles the connection.
-    tokio::spawn(task);
-}
-
-#[derive(Serialize)]
-struct Message {
-    message: &'static str,
-}
-
-/// "Server logic" is implemented in this function.
-///
-/// This function is a map from and HTTP request to a future of a response and
-/// represents the various handling a server might do. Currently the contents
-/// here are pretty uninteresting.
-#[cfg_attr(feature = "cargo-clippy", allow(needless_pass_by_value))]
-fn respond(req: Request<()>) -> Box<Future<Item = Response<String>, Error = io::Error> + Send> {
-    let mut response = Response::builder();
-    let body = match req.uri().path() {
-        "/plaintext" => {
-            response.header("Content-Type", "text/plain");
-            "Hello, World!".to_string()
-        }
-        "/json" => {
-            response.header("Content-Type", "application/json");
-            serde_json::to_string(&Message {
-                message: "Hello, World!",
-            }).unwrap()
-        }
-        _ => {
-            response.status(StatusCode::NOT_FOUND);
-            String::new()
-        }
-    };
-    Box::new(future::ok(response.body(body).unwrap()))
 }

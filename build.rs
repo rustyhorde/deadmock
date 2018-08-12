@@ -7,7 +7,11 @@ fn main() {
 }
 
 fn gen_constants() -> Result<()> {
-    let vergen = Vergen::new(ConstantsFlags::all())?;
+    let mut flags = ConstantsFlags::all();
+    flags.toggle(ConstantsFlags::SEMVER_LIGHTWEIGHT);
+    flags.toggle(ConstantsFlags::SHA_SHORT);
+    flags.toggle(ConstantsFlags::BUILD_DATE);
+    let vergen = Vergen::new(flags)?;
 
     for (k, v) in vergen.build_info() {
         println!("cargo:rustc-env={}={}", k.name(), v);

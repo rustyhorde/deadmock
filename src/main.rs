@@ -8,6 +8,7 @@
 
 //! `deadmock` 0.1.0
 #![deny(missing_docs)]
+#![feature(duration_as_u128, try_from)]
 #[macro_use]
 extern crate error_chain;
 #[macro_use]
@@ -16,12 +17,16 @@ extern crate getset;
 extern crate serde_derive;
 #[macro_use]
 extern crate slog;
+#[macro_use]
+extern crate slog_try;
 
 extern crate bytes;
 extern crate chrono;
 extern crate clap;
+extern crate colored;
 extern crate http as http_types;
 extern crate httparse;
+extern crate rand;
 extern crate serde;
 extern crate serde_json;
 extern crate slog_async;
@@ -33,6 +38,8 @@ extern crate tomlenv;
 
 mod environment;
 mod error;
+mod handler;
+mod header;
 mod http;
 mod matcher;
 mod run;
