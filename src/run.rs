@@ -80,6 +80,11 @@ pub fn run() -> Result<i32> {
         o!(env!("CARGO_PKG_NAME") => env!("VERGEN_SEMVER"), "env" => dm_env.clone()),
     );
 
+ // Setup logging clones to move into handlers.
+    let map_err_stderr = stderr.clone();
+    let process_stderr = stderr.clone();
+    let process_stdout = stdout.clone();
+
     // Load up the static mappings.
     let mappings = Mappings::new();
 
@@ -95,10 +100,7 @@ pub fn run() -> Result<i32> {
     trace!(stdout, "{}", current);
     info!(stdout, "Listening on '{}'", socket_addr);
 
-    // Setup logging clones to move into handlers.
-    let map_err_stderr = stderr.clone();
-    let process_stderr = stderr.clone();
-    let process_stdout = stdout.clone();
+
 
     tokio::run({
         listener

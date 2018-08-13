@@ -63,7 +63,7 @@ impl Handler {
                 if let Err(e) = res {
                     try_error!(
                         response_stderr,
-                        "failed to process connection; error = {:?}",
+                        "failed to process connection; error = {}",
                         e
                     );
                 }
