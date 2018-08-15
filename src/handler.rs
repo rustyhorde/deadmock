@@ -60,12 +60,18 @@ impl Handler {
         let (tx, rx) = Http.framed(self.stream).split();
 
         // Map all requests into responses and send them back to the client.
+        let response_stdout = self.stdout.clone();
         let response_stderr = self.stderr.clone();
         let response_state = self.state.clone();
         let proxy_map_clone = self.proxy_map.clone();
-        let task =
-            tx.send_all(rx.and_then(move |req| {
-                respond(req, response_state.clone(), proxy_map_clone.clone())
+        let task = tx
+            .send_all(rx.and_then(move |req| {
+                respond(
+                    req,
+                    response_stdout.clone(),
+                    response_state.clone(),
+                    proxy_map_clone.clone(),
+                )
             })).then(move |res| {
                 if let Err(e) = res {
                     try_error!(
@@ -96,10 +102,11 @@ struct Message {
 #[cfg_attr(feature = "cargo-clippy", allow(needless_pass_by_value))]
 fn respond(
     req: Request<()>,
+    stdout: Option<Logger>,
     state: Arc<Mutex<Mappings>>,
     proxy_map: Arc<Mutex<HashMap<&'static str, Proxy>>>,
 ) -> Box<Future<Item = Response<String>, Error = io::Error> + Send> {
-    match try_respond(&req, &state, &proxy_map) {
+    match try_respond(&req, &stdout, &state, &proxy_map) {
         Ok(response) => Box::new(future::ok(response)),
         Err(e) => {
             let mut response = Response::builder();
@@ -111,58 +118,64 @@ fn respond(
 
 fn try_respond(
     req: &Request<()>,
+    stdout: &Option<Logger>,
     state: &Arc<Mutex<Mappings>>,
     proxy_map: &Arc<Mutex<HashMap<&'static str, Proxy>>>,
 ) -> Result<Response<String>> {
     let mut response = Response::builder();
 
-    let mut locked_state = match state.lock() {
+    let locked_state = match state.lock() {
         Ok(guard) => guard,
         Err(poisoned) => poisoned.into_inner(),
     };
 
-    for mapping in locked_state.mappings_mut().values_mut() {
-        if mapping.has_match(&req) {
-            ()
-        }
+    if let Ok(matched) = locked_state.get_match(&req) {
+        try_trace!(stdout, "{}", matched);
+        response.header("Content-Type", "application/json");
+        response.status(StatusCode::OK);
+        Ok(response.body(r#"{ "message": "Success" }"#.to_string())?)
+    } else {
+        response.header("Content-Type", "application/json");
+        response.status(StatusCode::NOT_FOUND);
+        Ok(response.body(r#"{ "error": "Mapping not found""#.to_string())?)
     }
 
-    let body = match req.uri().path() {
-        "/healthcheck" => {
-            let mut locked_map = proxy_map.lock().unwrap();
-            let mut data = Vec::new();
+    // let body = match req.uri().path() {
+    //     "/healthcheck" => {
+    //         let mut locked_map = proxy_map.lock().unwrap();
+    //         let mut data = Vec::new();
 
-            let mut proxy = locked_map.entry("healthcheck").or_insert_with(|| {
-                Proxy::new("http://ecsb-test.kroger.com/mobilecheckout/healthcheck").unwrap()
-            });
-            {
-                let mut transfer = proxy.transfer();
-                transfer
-                    .write_function(|incoming_data| {
-                        data.extend_from_slice(incoming_data);
-                        Ok(incoming_data.len())
-                    }).unwrap();
-                transfer.perform().unwrap();
-            }
+    //         let mut proxy = locked_map.entry("healthcheck").or_insert_with(|| {
+    //             Proxy::new("http://ecsb-test.kroger.com/mobilecheckout/healthcheck").unwrap()
+    //         });
+    //         {
+    //             let mut transfer = proxy.transfer();
+    //             transfer
+    //                 .write_function(|incoming_data| {
+    //                     data.extend_from_slice(incoming_data);
+    //                     Ok(incoming_data.len())
+    //                 }).unwrap();
+    //             transfer.perform().unwrap();
+    //         }
 
-            response.header("Content-Type", "text/plain");
-            String::from_utf8_lossy(&data).into_owned()
-        }
-        "/plaintext" => {
-            response.header("Content-Type", "text/plain");
-            "Hello, World!".to_string()
-        }
-        "/json" => {
-            response.header("Content-Type", "application/json");
-            serde_json::to_string(&Message {
-                message: "Hello, World!",
-            }).unwrap()
-        }
-        _ => {
-            response.status(StatusCode::NOT_FOUND);
-            String::new()
-        }
-    };
+    //         response.header("Content-Type", "text/plain");
+    //         String::from_utf8_lossy(&data).into_owned()
+    //     }
+    //     "/plaintext" => {
+    //         response.header("Content-Type", "text/plain");
+    //         "Hello, World!".to_string()
+    //     }
+    //     "/json" => {
+    //         response.header("Content-Type", "application/json");
+    //         serde_json::to_string(&Message {
+    //             message: "Hello, World!",
+    //         }).unwrap()
+    //     }
+    //     _ => {
+    //         response.status(StatusCode::NOT_FOUND);
+    //         String::new()
+    //     }
+    // };
 
-    Ok(response.body(body)?)
+    // Ok(response.body(body)?)
 }

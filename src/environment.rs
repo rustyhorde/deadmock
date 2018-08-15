@@ -9,6 +9,7 @@
 //! `deadmock` environment config
 use std::env;
 use std::fmt;
+use util;
 
 /// The runtime environment for deadmock.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Getters, Hash, Eq, PartialEq, Serialize)]
@@ -24,23 +25,12 @@ pub struct Env<'a> {
     path: Option<&'a str>,
 }
 
-fn write_opt<T: fmt::Display + fmt::Debug>(
-    f: &mut fmt::Formatter,
-    key: &str,
-    opt: Option<T>,
-) -> fmt::Result {
-    if let Some(val) = opt {
-        write!(f, "{}: {}, ", key, val)?
-    };
-    Ok(())
-}
-
 impl<'a> fmt::Display for Env<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Env {{ ")?;
-        write_opt(f, "ip", self.ip).map_err(|_| fmt::Error)?;
-        write_opt(f, "port", self.port).map_err(|_| fmt::Error)?;
-        write_opt(f, "path", self.path).map_err(|_| fmt::Error)?;
+        util::write_opt(f, "ip", &self.ip).map_err(|_| fmt::Error)?;
+        util::write_opt(f, "port", &self.port).map_err(|_| fmt::Error)?;
+        util::write_opt(f, "path", &self.path).map_err(|_| fmt::Error)?;
         write!(f, "}}")
     }
 }

@@ -6,13 +6,16 @@
 // option. All files in the project carrying such notice may not be copied,
 // modified, or distributed except according to those terms.
 
-//! `deadmock` request matching configuration
-#[derive(Clone, Debug, Default, Deserialize, Getters, Hash, Eq, PartialEq, Serialize)]
-pub struct Request {
-    #[get = "pub"]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    method: Option<String>,
-    #[get = "pub"]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    url: Option<String>,
+//! `deadmock` utils.
+use std::fmt;
+
+pub fn write_opt<T: fmt::Display + fmt::Debug>(
+    f: &mut fmt::Formatter,
+    key: &str,
+    opt: &Option<T>,
+) -> fmt::Result {
+    if let Some(val) = opt {
+        write!(f, "{}: {}", key, val)?
+    };
+    Ok(())
 }

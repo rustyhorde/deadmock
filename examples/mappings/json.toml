@@ -1,0 +1,16 @@
+priority = 1
+
+[request]
+url = "/healthcheck"
+
+[response]
+status = 400
+body_file_name = "json-response.toml"
+
+[[response.headers]]
+key = "Content-Type"
+value = "application/json"
+
+[[response.headers]]
+key = "Accept"
+value = "application/json"

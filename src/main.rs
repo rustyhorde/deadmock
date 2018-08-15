@@ -47,6 +47,7 @@ mod header;
 mod http;
 mod matcher;
 mod run;
+mod util;
 
 use std::io::{self, Write};
 use std::process;

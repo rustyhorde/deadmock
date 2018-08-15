@@ -7,9 +7,18 @@
 // modified, or distributed except according to those terms.
 
 //! `deadmock` response templating configuration
+
 #[derive(Clone, Debug, Default, Deserialize, Getters, Hash, Eq, PartialEq, Serialize)]
 pub struct Response {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    status: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    headers: Option<Vec<Header>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    body_file_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     proxy_base_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     additional_proxy_request_headers: Option<Vec<Header>>,
 }
 

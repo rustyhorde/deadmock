@@ -108,7 +108,7 @@ pub fn run() -> Result<i32> {
 
     // Load up the static mappings.
     let mut mappings = Mappings::new();
-    let mappings_path = Path::new("examples").join("config");
+    let mappings_path = Path::new("examples").join("mappings");
     visit_dirs(&mappings_path, &mut |entry| -> Result<()> {
         trace!(stdout, "Loading Mapping: {}", entry.path().display());
         let f = File::open(entry.path())?;
@@ -116,6 +116,7 @@ pub fn run() -> Result<i32> {
         let mut buffer = Vec::new();
         reader.read_to_end(&mut buffer)?;
         let mapping: Matcher = toml::from_slice(&buffer)?;
+        trace!(stdout, "{}", mapping);
         mappings.add(Uuid::new_v4(), mapping);
         Ok(())
     })?;
