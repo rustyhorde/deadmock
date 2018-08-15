@@ -1,8 +1,12 @@
-priority = 1
+priority = 10
 
 [request]
 method = "GET"
-url = "jasonozias.com"
+url = "/mobilecheckout/healthcheck"
 
 [response]
-proxy-base-url = "jasonozias.com"
+proxy-base-url = "http://jasonozias.com"
+
+    [[response.additional-proxy-request-headers]]
+    key = "User-Agent"
+    value = "krogerco/13.0/iOS"

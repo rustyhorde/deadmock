@@ -6,15 +6,24 @@
 // option. All files in the project carrying such notice may not be copied,
 // modified, or distributed except according to those terms.
 
-//! `deadmock` errors
-error_chain!{
-    foreign_links {
-        AddrParse(::std::net::AddrParseError);
-        Curl(::curl::Error);
-        Fmt(::std::fmt::Error);
-        Io(::std::io::Error);
-        Json(::serde_json::Error);
-        TomlDe(::toml::de::Error);
-        TomlEnv(::tomlenv::Error);
+//! `deadmock` proxy request handler.
+
+use curl::easy::{Easy, Transfer};
+use error::Result;
+
+#[derive(Debug)]
+pub struct Proxy {
+    handle: Easy,
+}
+
+impl Proxy {
+    pub fn new(url: &str) -> Result<Self> {
+        let mut handle = Easy::new();
+        handle.url(url)?;
+        Ok(Self { handle })
+    }
+
+    pub fn transfer(&mut self) -> Transfer {
+        self.handle.transfer()
     }
 }

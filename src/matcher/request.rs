@@ -7,5 +7,8 @@
 // modified, or distributed except according to those terms.
 
 //! `deadmock` request matching configuration
-#[derive(Clone, Copy, Debug, Default, Deserialize, Getters, Hash, Eq, PartialEq, Serialize)]
-pub struct Request {}
+#[derive(Clone, Debug, Default, Deserialize, Getters, Hash, Eq, PartialEq, Serialize)]
+pub struct Request {
+    method: String,
+    url: Option<String>,
+}

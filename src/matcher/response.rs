@@ -7,5 +7,14 @@
 // modified, or distributed except according to those terms.
 
 //! `deadmock` response templating configuration
-#[derive(Clone, Copy, Debug, Default, Deserialize, Getters, Hash, Eq, PartialEq, Serialize)]
-pub struct Response {}
+#[derive(Clone, Debug, Default, Deserialize, Getters, Hash, Eq, PartialEq, Serialize)]
+pub struct Response {
+    proxy_base_url: Option<String>,
+    additional_proxy_request_headers: Option<Vec<Header>>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Getters, Hash, Eq, PartialEq, Serialize)]
+pub struct Header {
+    key: String,
+    value: String,
+}

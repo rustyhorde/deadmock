@@ -7,7 +7,9 @@
 // modified, or distributed except according to those terms.
 
 //! `deadmock` configuration
+use http_types::Request as HttpRequest;
 use std::collections::HashMap;
+use uuid::Uuid;
 
 mod request;
 mod response;
@@ -15,9 +17,10 @@ mod response;
 pub use self::request::Request;
 pub use self::response::Response;
 
-#[derive(Clone, Debug, Default, Deserialize, Eq, Getters, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, Getters, MutGetters, PartialEq, Serialize)]
 pub struct Mappings {
-    mappings: HashMap<String, Matcher>,
+    #[get_mut = "pub"]
+    mappings: HashMap<Uuid, Matcher>,
 }
 
 impl Mappings {
@@ -26,11 +29,21 @@ impl Mappings {
             mappings: HashMap::new(),
         }
     }
+
+    pub fn add(&mut self, uuid: Uuid, matcher: Matcher) {
+        self.mappings.insert(uuid, matcher);
+    }
 }
 
-#[derive(Copy, Clone, Debug, Default, Deserialize, Eq, Getters, Hash, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, Getters, Hash, PartialEq, Serialize)]
 pub struct Matcher {
     priority: u8,
-    request: Request,
-    response: Response,
+    request: Option<Request>,
+    response: Option<Response>,
+}
+
+impl Matcher {
+    pub fn has_match(&self, request: &HttpRequest<()>) -> bool {
+        false
+    }
 }

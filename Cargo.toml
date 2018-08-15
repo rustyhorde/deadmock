@@ -19,6 +19,7 @@ version = "0.1.0"
 bytes = "0"
 clap = "2"
 colored = "1"
+curl = "0"
 error-chain = "0"
 getset = "0"
 http = "0"
@@ -33,6 +34,7 @@ slog-try = "0"
 tokio = "0"
 tokio-codec = "0"
 tokio-io = "0"
+toml = "0"
 tomlenv = "0"
 
 [dependencies.slog]
@@ -42,6 +44,10 @@ features = ["max_level_trace", "release_max_level_trace"]
 [dependencies.chrono]
 version = "0"
 features = ["serde"]
+
+[dependencies.uuid]
+version = "0"
+features = ["v4", "u128", "serde"]
 
 [build-dependencies]
 vergen = "2"

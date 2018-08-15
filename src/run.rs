@@ -12,17 +12,38 @@ use environment::Env;
 use error::Result;
 use handler::Handler;
 use header;
-use matcher::Mappings;
+use matcher::{Mappings, Matcher};
 use slog::{Drain, Level, Logger};
 use slog_async::Async;
 use slog_term::{CompactFormat, TermDecorator};
+use std::fs::{self, DirEntry, File};
+use std::io::{BufReader, Read};
 use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use tokio;
 use tokio::net::TcpListener;
 use tokio::prelude::Stream;
+use toml;
 use tomlenv::{Environment, Environments};
+use uuid::Uuid;
+
+fn visit_dirs<F>(dir: &Path, cb: &mut F) -> Result<()>
+where
+    F: FnMut(&DirEntry) -> Result<()>,
+{
+    if fs::metadata(dir)?.is_dir() {
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            if fs::metadata(entry.path())?.is_dir() {
+                visit_dirs(&entry.path(), cb)?;
+            } else {
+                cb(&entry)?;
+            }
+        }
+    }
+    Ok(())
+}
 
 /// CLI Runtime
 pub fn run() -> Result<i32> {
@@ -80,13 +101,24 @@ pub fn run() -> Result<i32> {
         o!(env!("CARGO_PKG_NAME") => env!("VERGEN_SEMVER"), "env" => dm_env.clone()),
     );
 
- // Setup logging clones to move into handlers.
+    // Setup logging clones to move into handlers.
     let map_err_stderr = stderr.clone();
     let process_stderr = stderr.clone();
     let process_stdout = stdout.clone();
 
     // Load up the static mappings.
-    let mappings = Mappings::new();
+    let mut mappings = Mappings::new();
+    let mappings_path = Path::new("examples").join("config");
+    visit_dirs(&mappings_path, &mut |entry| -> Result<()> {
+        trace!(stdout, "Loading Mapping: {}", entry.path().display());
+        let f = File::open(entry.path())?;
+        let mut reader = BufReader::new(f);
+        let mut buffer = Vec::new();
+        reader.read_to_end(&mut buffer)?;
+        let mapping: Matcher = toml::from_slice(&buffer)?;
+        mappings.add(Uuid::new_v4(), mapping);
+        Ok(())
+    })?;
 
     let state = Arc::new(Mutex::new(mappings));
 
@@ -99,8 +131,6 @@ pub fn run() -> Result<i32> {
 
     trace!(stdout, "{}", current);
     info!(stdout, "Listening on '{}'", socket_addr);
-
-
 
     tokio::run({
         listener
