@@ -99,10 +99,10 @@ fn respond(
     state: Arc<Mutex<Mappings>>,
     proxy_map: Arc<Mutex<HashMap<&'static str, Proxy>>>,
 ) -> Box<Future<Item = Response<String>, Error = io::Error> + Send> {
-    match try_respond(req, state, proxy_map) {
+    match try_respond(&req, &state, &proxy_map) {
         Ok(response) => Box::new(future::ok(response)),
         Err(e) => {
-            let response = Response::builder();
+            let mut response = Response::builder();
             response.status(503);
             Box::new(future::ok(response.body(e.to_string()).unwrap()))
         }
@@ -110,9 +110,9 @@ fn respond(
 }
 
 fn try_respond(
-    req: Request<()>,
-    state: Arc<Mutex<Mappings>>,
-    proxy_map: Arc<Mutex<HashMap<&'static str, Proxy>>>,
+    req: &Request<()>,
+    state: &Arc<Mutex<Mappings>>,
+    proxy_map: &Arc<Mutex<HashMap<&'static str, Proxy>>>,
 ) -> Result<Response<String>> {
     let mut response = Response::builder();
 
@@ -121,7 +121,7 @@ fn try_respond(
         Err(poisoned) => poisoned.into_inner(),
     };
 
-    for (_, mapping) in locked_state.mappings_mut() {
+    for mapping in locked_state.mappings_mut().values_mut() {
         if mapping.has_match(&req) {
             ()
         }
@@ -164,5 +164,5 @@ fn try_respond(
         }
     };
 
-    Ok(response.body()?)
+    Ok(response.body(body)?)
 }

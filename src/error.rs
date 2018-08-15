@@ -12,6 +12,7 @@ error_chain!{
         AddrParse(::std::net::AddrParseError);
         Curl(::curl::Error);
         Fmt(::std::fmt::Error);
+        Http(::http_types::Error);
         Io(::std::io::Error);
         Json(::serde_json::Error);
         TomlDe(::toml::de::Error);

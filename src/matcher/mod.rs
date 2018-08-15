@@ -43,7 +43,7 @@ pub struct Matcher {
 }
 
 impl Matcher {
-    pub fn has_match(&self, request: &HttpRequest<()>) -> bool {
+    pub fn has_match(&self, _request: &HttpRequest<()>) -> bool {
         false
     }
 }
