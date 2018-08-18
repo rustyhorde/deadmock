@@ -1,0 +1,12 @@
+priority = 1
+
+[request]
+url = "/plaintext"
+
+[response]
+status = 200
+body_file_name = "plaintext-response.txt"
+
+[[response.headers]]
+key = "Content-Type"
+value = "text/plain"
