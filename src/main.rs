@@ -10,9 +10,13 @@
 #![deny(missing_docs)]
 #![feature(duration_as_u128, try_from)]
 #[macro_use]
+extern crate cached;
+#[macro_use]
 extern crate error_chain;
 #[macro_use]
 extern crate getset;
+#[macro_use]
+extern crate lazy_static;
 #[macro_use]
 extern crate serde_derive;
 #[macro_use]
@@ -39,7 +43,6 @@ extern crate toml;
 extern crate tomlenv;
 extern crate uuid;
 
-mod client;
 mod environment;
 mod error;
 mod handler;

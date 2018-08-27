@@ -7,11 +7,16 @@
 // modified, or distributed except according to those terms.
 
 //! `deadmock` configuration
+use cached::UnboundCache;
 use error::Result;
-use http_types::Request as HttpRequest;
+use http_types::{Request as HttpRequest, Response as HttpResponse, StatusCode};
 use serde_json;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
+use std::fs::File;
+use std::io::{BufReader, Read};
+use std::path::Path;
+use util;
 use uuid::Uuid;
 
 mod request;
@@ -54,6 +59,34 @@ impl Mappings {
     }
 }
 
+cached_key_result!{
+    BLAH: UnboundCache<String, String> = UnboundCache::new();
+    Key = { filename.to_string() };
+    fn load(filename: &str) -> ::std::result::Result<String, &str> = {
+        let files_path = Path::new("examples").join("files");
+        let mut buffer = String::new();
+        let mut found = false;
+
+        util::visit_dirs(&files_path, &mut |entry| -> Result<()> {
+            if let Some(fname) = entry.path().file_name() {
+                if fname.to_string_lossy() == filename {
+                    let f = File::open(entry.path())?;
+                    let mut reader = BufReader::new(f);
+                    reader.read_to_string(&mut buffer)?;
+                    found = true;
+                }
+            }
+            Ok(())
+        }).map_err(|_| "Body file not found!")?;
+
+        if found {
+            Ok(buffer)
+        } else {
+            Err("Body file not found!")
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, Deserialize, Eq, Getters, Hash, PartialEq, Serialize)]
 pub struct Matcher {
     #[get = "pub"]
@@ -70,6 +103,33 @@ impl Matcher {
             request.uri().path() == url
         } else {
             false
+        }
+    }
+
+    pub fn http_response(&self) -> Result<HttpResponse<String>> {
+        let mut response = HttpResponse::builder();
+
+        if let Some(proxy_base_url) = self.response.proxy_base_url() {
+            // TODO: Load and cache proxy channels.
+            Ok(response.body(format!("proxy response: {}", proxy_base_url))?)
+        } else {
+            if let Some(headers) = self.response.headers() {
+                for header in headers {
+                    response.header(&header.key()[..], &header.value()[..]);
+                }
+            }
+
+            if let Some(status) = self.response.status() {
+                response.status(StatusCode::from_u16(*status)?);
+            } else {
+                response.status(StatusCode::OK);
+            }
+
+            if let Some(body_file_name) = self.response.body_file_name() {
+                Ok(response.body(load(body_file_name)?)?)
+            } else {
+                Ok(response.body("".to_string())?)
+            }
         }
     }
 }

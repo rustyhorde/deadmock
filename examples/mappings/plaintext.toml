@@ -4,7 +4,6 @@ priority = 1
 url = "/plaintext"
 
 [response]
-status = 200
 body_file_name = "plaintext-response.txt"
 
 [[response.headers]]

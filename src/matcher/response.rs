@@ -11,19 +11,26 @@
 #[derive(Clone, Debug, Default, Deserialize, Getters, Hash, Eq, PartialEq, Serialize)]
 pub struct Response {
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[get = "pub"]
     status: Option<u16>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[get = "pub"]
     headers: Option<Vec<Header>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[get = "pub"]
     body_file_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[get = "pub"]
     proxy_base_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[get = "pub"]
     additional_proxy_request_headers: Option<Vec<Header>>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Getters, Hash, Eq, PartialEq, Serialize)]
 pub struct Header {
+    #[get = "pub"]
     key: String,
+    #[get = "pub"]
     value: String,
 }

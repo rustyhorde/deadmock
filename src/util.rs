@@ -7,7 +7,10 @@
 // modified, or distributed except according to those terms.
 
 //! `deadmock` utils.
+use error::Result;
 use std::fmt;
+use std::fs::{self, DirEntry};
+use std::path::Path;
 
 pub fn write_opt<T: fmt::Display + fmt::Debug>(
     f: &mut fmt::Formatter,
@@ -17,5 +20,22 @@ pub fn write_opt<T: fmt::Display + fmt::Debug>(
     if let Some(val) = opt {
         write!(f, "{}: {}", key, val)?
     };
+    Ok(())
+}
+
+pub fn visit_dirs<F>(dir: &Path, cb: &mut F) -> Result<()>
+where
+    F: FnMut(&DirEntry) -> Result<()>,
+{
+    if fs::metadata(dir)?.is_dir() {
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            if fs::metadata(entry.path())?.is_dir() {
+                visit_dirs(&entry.path(), cb)?;
+            } else {
+                cb(&entry)?;
+            }
+        }
+    }
     Ok(())
 }

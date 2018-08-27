@@ -5,8 +5,8 @@ method = "GET"
 url = "/mobilecheckout/healthcheck"
 
 [response]
-proxy-base-url = "http://jasonozias.com"
+proxy_base_url = "http://jasonozias.com"
 
-    [[response.additional-proxy-request-headers]]
-    key = "User-Agent"
-    value = "krogerco/13.0/iOS"
+[[response.additional_proxy_request_headers]]
+key = "User-Agent"
+value = "krogerco/13.0/iOS"

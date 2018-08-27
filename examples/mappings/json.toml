@@ -1,11 +1,10 @@
 priority = 1
 
 [request]
-url = "/healthcheck"
+url = "/json"
 
 [response]
-status = 400
-body_file_name = "json-response.toml"
+body_file_name = "json-response.json"
 
 [[response.headers]]
 key = "Content-Type"

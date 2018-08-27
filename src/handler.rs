@@ -7,14 +7,11 @@
 // modified, or distributed except according to those terms.
 
 //! `deadmock` request/response handler.
-use client::Proxy;
 use error::Result;
 use http::Http;
 use http_types::{Request, Response, StatusCode};
 use matcher::Mappings;
-use serde_json;
 use slog::Logger;
-use std::collections::HashMap;
 use std::io;
 use std::sync::{Arc, Mutex};
 use tokio;
@@ -27,18 +24,18 @@ pub struct Handler {
     stdout: Option<Logger>,
     stderr: Option<Logger>,
     stream: TcpStream,
-    state: Arc<Mutex<Mappings>>,
-    proxy_map: Arc<Mutex<HashMap<&'static str, Proxy>>>,
+    static_mappings: Mappings,
+    dynamic_mappings: Arc<Mutex<Mappings>>,
 }
 
 impl Handler {
-    pub fn new(stream: TcpStream, state: Arc<Mutex<Mappings>>) -> Self {
+    pub fn new(stream: TcpStream, static_mappings: Mappings) -> Self {
         Self {
             stdout: None,
             stderr: None,
             stream,
-            state,
-            proxy_map: Arc::new(Mutex::new(HashMap::new())),
+            static_mappings,
+            dynamic_mappings: Arc::new(Mutex::new(Mappings::new())),
         }
     }
 
@@ -62,15 +59,15 @@ impl Handler {
         // Map all requests into responses and send them back to the client.
         let response_stdout = self.stdout.clone();
         let response_stderr = self.stderr.clone();
-        let response_state = self.state.clone();
-        let proxy_map_clone = self.proxy_map.clone();
+        let static_mappings = self.static_mappings.clone();
+        let dynamic_mappings = self.dynamic_mappings.clone();
         let task = tx
             .send_all(rx.and_then(move |req| {
                 respond(
                     req,
                     response_stdout.clone(),
-                    response_state.clone(),
-                    proxy_map_clone.clone(),
+                    static_mappings.clone(),
+                    dynamic_mappings.clone(),
                 )
             })).then(move |res| {
                 if let Err(e) = res {
@@ -89,11 +86,6 @@ impl Handler {
     }
 }
 
-#[derive(Serialize)]
-struct Message {
-    message: &'static str,
-}
-
 /// "Server logic" is implemented in this function.
 ///
 /// This function is a map from and HTTP request to a future of a response and
@@ -103,10 +95,10 @@ struct Message {
 fn respond(
     req: Request<()>,
     stdout: Option<Logger>,
-    state: Arc<Mutex<Mappings>>,
-    proxy_map: Arc<Mutex<HashMap<&'static str, Proxy>>>,
+    static_mappings: Mappings,
+    dynamic_mappings: Arc<Mutex<Mappings>>,
 ) -> Box<Future<Item = Response<String>, Error = io::Error> + Send> {
-    match try_respond(&req, &stdout, &state, &proxy_map) {
+    match try_respond(&req, &stdout, &static_mappings, &dynamic_mappings) {
         Ok(response) => Box::new(future::ok(response)),
         Err(e) => {
             let mut response = Response::builder();
@@ -119,63 +111,26 @@ fn respond(
 fn try_respond(
     req: &Request<()>,
     stdout: &Option<Logger>,
-    state: &Arc<Mutex<Mappings>>,
-    proxy_map: &Arc<Mutex<HashMap<&'static str, Proxy>>>,
+    static_mappings: &Mappings,
+    dynamic_mappings: &Arc<Mutex<Mappings>>,
 ) -> Result<Response<String>> {
-    let mut response = Response::builder();
-
-    let locked_state = match state.lock() {
-        Ok(guard) => guard,
-        Err(poisoned) => poisoned.into_inner(),
-    };
-
-    if let Ok(matched) = locked_state.get_match(&req) {
+    if let Ok(matched) = static_mappings.get_match(&req) {
         try_trace!(stdout, "{}", matched);
-        response.header("Content-Type", "application/json");
-        response.status(StatusCode::OK);
-        Ok(response.body(r#"{ "message": "Success" }"#.to_string())?)
+        matched.http_response()
     } else {
-        response.header("Content-Type", "application/json");
-        response.status(StatusCode::NOT_FOUND);
-        Ok(response.body(r#"{ "error": "Mapping not found""#.to_string())?)
+        let mut response = Response::builder();
+        let locked_dynamic_mappings = match dynamic_mappings.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+
+        if let Ok(matched) = locked_dynamic_mappings.get_match(&req) {
+            try_trace!(stdout, "{}", matched);
+            matched.http_response()
+        } else {
+            response.header("Content-Type", "application/json");
+            response.status(StatusCode::NOT_FOUND);
+            Ok(response.body(r#"{ "error": "Mapping not found""#.to_string())?)
+        }
     }
-
-    // let body = match req.uri().path() {
-    //     "/healthcheck" => {
-    //         let mut locked_map = proxy_map.lock().unwrap();
-    //         let mut data = Vec::new();
-
-    //         let mut proxy = locked_map.entry("healthcheck").or_insert_with(|| {
-    //             Proxy::new("http://ecsb-test.kroger.com/mobilecheckout/healthcheck").unwrap()
-    //         });
-    //         {
-    //             let mut transfer = proxy.transfer();
-    //             transfer
-    //                 .write_function(|incoming_data| {
-    //                     data.extend_from_slice(incoming_data);
-    //                     Ok(incoming_data.len())
-    //                 }).unwrap();
-    //             transfer.perform().unwrap();
-    //         }
-
-    //         response.header("Content-Type", "text/plain");
-    //         String::from_utf8_lossy(&data).into_owned()
-    //     }
-    //     "/plaintext" => {
-    //         response.header("Content-Type", "text/plain");
-    //         "Hello, World!".to_string()
-    //     }
-    //     "/json" => {
-    //         response.header("Content-Type", "application/json");
-    //         serde_json::to_string(&Message {
-    //             message: "Hello, World!",
-    //         }).unwrap()
-    //     }
-    //     _ => {
-    //         response.status(StatusCode::NOT_FOUND);
-    //         String::new()
-    //     }
-    // };
-
-    // Ok(response.body(body)?)
 }

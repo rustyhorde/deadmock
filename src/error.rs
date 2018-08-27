@@ -13,6 +13,7 @@ error_chain!{
         Curl(::curl::Error);
         Fmt(::std::fmt::Error);
         Http(::http_types::Error);
+        InvalidStatusCode(::http_types::status::InvalidStatusCode);
         Io(::std::io::Error);
         Json(::serde_json::Error);
         TomlDe(::toml::de::Error);
