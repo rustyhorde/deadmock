@@ -9,6 +9,7 @@
 //! `deadmock` configuration
 use cached::UnboundCache;
 use error::Result;
+use futures::{self, future, Future, Stream};
 use http_types::{Request as HttpRequest, Response as HttpResponse, StatusCode};
 use serde_json;
 use std::collections::{BTreeMap, HashMap};
@@ -16,6 +17,9 @@ use std::fmt;
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::Path;
+use std::thread;
+use std::time::Duration;
+use tokio;
 use util;
 use uuid::Uuid;
 
@@ -60,7 +64,7 @@ impl Mappings {
 }
 
 cached_key_result!{
-    BLAH: UnboundCache<String, String> = UnboundCache::new();
+    STATIC_RESPONSE: UnboundCache<String, String> = UnboundCache::new();
     Key = { filename.to_string() };
     fn load(filename: &str) -> ::std::result::Result<String, &str> = {
         let files_path = Path::new("examples").join("files");
@@ -106,13 +110,46 @@ impl Matcher {
         }
     }
 
-    pub fn http_response(&self) -> Result<HttpResponse<String>> {
-        let mut response = HttpResponse::builder();
-
+    pub fn http_response(
+        &self,
+        _request: &HttpRequest<()>,
+    ) -> Box<Future<Item = HttpResponse<String>, Error = String> + Send> {
         if let Some(proxy_base_url) = self.response.proxy_base_url() {
-            // TODO: Load and cache proxy channels.
-            Ok(response.body(format!("proxy response: {}", proxy_base_url))?)
+            let (sink, stream) = futures::sync::mpsc::unbounded();
+            let pbu_clone = proxy_base_url.clone();
+
+            thread::spawn(move || {
+                let parts: Vec<&str> = pbu_clone.split("://").collect();
+                if let Ok(addrs) = util::resolve(parts[0], parts[1]) {
+                    for socket_addr in addrs {
+                        println!("Addr: {}", socket_addr);
+                    }
+                }
+
+                let delay = Duration::from_secs(2);
+                thread::sleep(delay);
+
+                let work = futures::future::ok::<String, ()>("output".to_string());
+                let proxy = work.then(move |result| sink.unbounded_send(result).map_err(|_| ()));
+                tokio::run(proxy);
+            });
+
+            let mut buffer = Vec::new();
+            let response = stream
+                .fold(buffer, |mut buffer, res| {
+                    if let Ok(response) = res {
+                        buffer.extend_from_slice(response.as_bytes());
+                    }
+                    future::ok(buffer)
+                }).map_err(|_| "blah".to_string())
+                .map(move |res| {
+                    let val = String::from_utf8_lossy(&res).into_owned();
+                    util::response(val, StatusCode::OK)
+                });
+
+            Box::new(response)
         } else {
+            let mut response = HttpResponse::builder();
             if let Some(headers) = self.response.headers() {
                 for header in headers {
                     response.header(&header.key()[..], &header.value()[..]);
@@ -120,15 +157,29 @@ impl Matcher {
             }
 
             if let Some(status) = self.response.status() {
-                response.status(StatusCode::from_u16(*status)?);
+                response.status(if let Ok(status) = StatusCode::from_u16(*status) {
+                    status
+                } else {
+                    StatusCode::INTERNAL_SERVER_ERROR
+                });
             } else {
                 response.status(StatusCode::OK);
             }
 
-            if let Some(body_file_name) = self.response.body_file_name() {
-                Ok(response.body(load(body_file_name)?)?)
+            let body = if let Some(body_file_name) = self.response.body_file_name() {
+                match load(body_file_name) {
+                    Ok(body) => body,
+                    Err(e) => e.to_string(),
+                }
             } else {
-                Ok(response.body("".to_string())?)
+                "Unable to process body".to_string()
+            };
+
+            match response.body(body) {
+                Ok(response) => Box::new(future::ok(response)),
+                Err(e) => {
+                    util::error_response_fut(format!("{}", e), StatusCode::INTERNAL_SERVER_ERROR)
+                }
             }
         }
     }

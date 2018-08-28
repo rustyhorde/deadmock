@@ -7,7 +7,6 @@
 // modified, or distributed except according to those terms.
 
 //! `deadmock` request/response handler.
-use error::Result;
 use http::Http;
 use http_types::{Request, Response, StatusCode};
 use matcher::Mappings;
@@ -16,8 +15,9 @@ use std::io;
 use std::sync::{Arc, Mutex};
 use tokio;
 use tokio::net::TcpStream;
-use tokio::prelude::{future, Future, Sink, Stream};
+use tokio::prelude::{Future, Sink, Stream};
 use tokio_codec::Decoder;
+use util;
 
 #[derive(Debug)]
 pub struct Handler {
@@ -68,7 +68,7 @@ impl Handler {
                     response_stdout.clone(),
                     static_mappings.clone(),
                     dynamic_mappings.clone(),
-                )
+                ).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
             })).then(move |res| {
                 if let Err(e) = res {
                     try_error!(
@@ -89,48 +89,28 @@ impl Handler {
 /// "Server logic" is implemented in this function.
 ///
 /// This function is a map from and HTTP request to a future of a response and
-/// represents the various handling a server might do. Currently the contents
-/// here are pretty uninteresting.
+/// represents the various handling a server might do.
 #[cfg_attr(feature = "cargo-clippy", allow(needless_pass_by_value))]
 fn respond(
-    req: Request<()>,
+    request: Request<()>,
     stdout: Option<Logger>,
     static_mappings: Mappings,
     dynamic_mappings: Arc<Mutex<Mappings>>,
-) -> Box<Future<Item = Response<String>, Error = io::Error> + Send> {
-    match try_respond(&req, &stdout, &static_mappings, &dynamic_mappings) {
-        Ok(response) => Box::new(future::ok(response)),
-        Err(e) => {
-            let mut response = Response::builder();
-            response.status(503);
-            Box::new(future::ok(response.body(e.to_string()).unwrap()))
-        }
-    }
-}
-
-fn try_respond(
-    req: &Request<()>,
-    stdout: &Option<Logger>,
-    static_mappings: &Mappings,
-    dynamic_mappings: &Arc<Mutex<Mappings>>,
-) -> Result<Response<String>> {
-    if let Ok(matched) = static_mappings.get_match(&req) {
+) -> Box<Future<Item = Response<String>, Error = String> + Send> {
+    if let Ok(matched) = static_mappings.get_match(&request) {
         try_trace!(stdout, "{}", matched);
-        matched.http_response()
+        matched.http_response(&request)
     } else {
-        let mut response = Response::builder();
         let locked_dynamic_mappings = match dynamic_mappings.lock() {
             Ok(guard) => guard,
             Err(poisoned) => poisoned.into_inner(),
         };
 
-        if let Ok(matched) = locked_dynamic_mappings.get_match(&req) {
+        if let Ok(matched) = locked_dynamic_mappings.get_match(&request) {
             try_trace!(stdout, "{}", matched);
-            matched.http_response()
+            matched.http_response(&request)
         } else {
-            response.header("Content-Type", "application/json");
-            response.status(StatusCode::NOT_FOUND);
-            Ok(response.body(r#"{ "error": "Mapping not found""#.to_string())?)
+            util::error_response_fut("No mapping found".to_string(), StatusCode::NOT_FOUND)
         }
     }
 }

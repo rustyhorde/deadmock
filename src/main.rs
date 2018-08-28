@@ -29,6 +29,7 @@ extern crate chrono;
 extern crate clap;
 extern crate colored;
 extern crate curl;
+extern crate futures;
 extern crate http as http_types;
 extern crate httparse;
 extern crate rand;

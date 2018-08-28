@@ -8,8 +8,13 @@
 
 //! `deadmock` utils.
 use error::Result;
+use futures::{future, Future};
+use http_types::header::{HeaderValue, CONTENT_TYPE};
+use http_types::{Response, StatusCode};
+use serde_json;
 use std::fmt;
 use std::fs::{self, DirEntry};
+use std::net::{SocketAddr, ToSocketAddrs};
 use std::path::Path;
 
 pub fn write_opt<T: fmt::Display + fmt::Debug>(
@@ -38,4 +43,56 @@ where
         }
     }
     Ok(())
+}
+
+pub fn response(body: String, status_code: StatusCode) -> Response<String> {
+    let mut response = Response::builder();
+    response
+        .header(CONTENT_TYPE, HeaderValue::from_static("application/json"))
+        .status(status_code);
+
+    if let Ok(response) = response.body(body) {
+        response
+    } else {
+        error_response(
+            "Unable to process body".to_string(),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        )
+    }
+}
+
+pub fn error_response_fut(
+    body: String,
+    status_code: StatusCode,
+) -> Box<Future<Item = Response<String>, Error = String> + Send> {
+    Box::new(future::ok(error_response(body, status_code)))
+}
+
+#[derive(Serialize)]
+struct ErrorMessage {
+    message: String,
+}
+
+pub fn error_response(message: String, status_code: StatusCode) -> Response<String> {
+    let mut response = Response::builder();
+    response
+        .header(CONTENT_TYPE, HeaderValue::from_static("application/json"))
+        .status(status_code);
+
+    if let Ok(message) = serde_json::to_string(&ErrorMessage { message }) {
+        if let Ok(response) = response.body(message) {
+            return response;
+        }
+    }
+
+    Response::new(r#"{ "message": "Unable to process body" }"#.to_string())
+}
+
+pub fn resolve(protocol: &str, host: &str) -> Result<Vec<SocketAddr>> {
+    let port = match protocol {
+        "http" => 80,
+        "https" => 443,
+        _ => 0,
+    };
+    Ok((host, port).to_socket_addrs()?.collect())
 }
