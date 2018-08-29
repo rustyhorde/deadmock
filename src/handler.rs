@@ -7,7 +7,7 @@
 // modified, or distributed except according to those terms.
 
 //! `deadmock` request/response handler.
-use http::Http;
+use codec::inbound::Http;
 use http_types::{Request, Response, StatusCode};
 use matcher::Mappings;
 use slog::Logger;
@@ -99,7 +99,7 @@ fn respond(
 ) -> Box<Future<Item = Response<String>, Error = String> + Send> {
     if let Ok(matched) = static_mappings.get_match(&request) {
         try_trace!(stdout, "{}", matched);
-        matched.http_response(&request)
+        matched.http_response(request)
     } else {
         let locked_dynamic_mappings = match dynamic_mappings.lock() {
             Ok(guard) => guard,
@@ -108,7 +108,7 @@ fn respond(
 
         if let Ok(matched) = locked_dynamic_mappings.get_match(&request) {
             try_trace!(stdout, "{}", matched);
-            matched.http_response(&request)
+            matched.http_response(request)
         } else {
             util::error_response_fut("No mapping found".to_string(), StatusCode::NOT_FOUND)
         }

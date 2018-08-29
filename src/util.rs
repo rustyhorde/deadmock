@@ -45,6 +45,7 @@ where
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn response(body: String, status_code: StatusCode) -> Response<String> {
     let mut response = Response::builder();
     response

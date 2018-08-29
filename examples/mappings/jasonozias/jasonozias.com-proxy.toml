@@ -5,7 +5,7 @@ method = "GET"
 url = "/mobilecheckout/healthcheck"
 
 [response]
-proxy_base_url = "http://jasonozias.com"
+proxy_base_url = "http://www.espn.com"
 
 [[response.additional_proxy_request_headers]]
 key = "User-Agent"

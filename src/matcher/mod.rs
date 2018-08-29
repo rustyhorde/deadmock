@@ -8,18 +8,19 @@
 
 //! `deadmock` configuration
 use cached::UnboundCache;
+use codec::outbound::Http;
 use error::Result;
-use futures::{self, future, Future, Stream};
-use http_types::{Request as HttpRequest, Response as HttpResponse, StatusCode};
+use futures::{future, Future, Sink, Stream};
+use http_types::{Request as HttpRequest, Response as HttpResponse, StatusCode, Uri};
 use serde_json;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::Path;
-use std::thread;
-use std::time::Duration;
 use tokio;
+use tokio::net::TcpStream;
+use tokio_codec::Decoder;
 use util;
 use uuid::Uuid;
 
@@ -112,42 +113,80 @@ impl Matcher {
 
     pub fn http_response(
         &self,
-        _request: &HttpRequest<()>,
+        request: HttpRequest<()>,
     ) -> Box<Future<Item = HttpResponse<String>, Error = String> + Send> {
         if let Some(proxy_base_url) = self.response.proxy_base_url() {
-            let (sink, stream) = futures::sync::mpsc::unbounded();
+            // let (sink, stream) = futures::sync::mpsc::unbounded();
             let pbu_clone = proxy_base_url.clone();
 
-            thread::spawn(move || {
-                let parts: Vec<&str> = pbu_clone.split("://").collect();
-                if let Ok(addrs) = util::resolve(parts[0], parts[1]) {
-                    for socket_addr in addrs {
-                        println!("Addr: {}", socket_addr);
-                    }
+            // thread::spawn(move || {
+            let parts: Vec<&str> = pbu_clone.split("://").collect();
+            if let Ok(addrs) = util::resolve(parts[0], parts[1]) {
+                if addrs.is_empty() {
+                    Box::new(future::err("".to_string()))
+                } else {
+                    let tcp = TcpStream::connect(&addrs[0]);
+
+                    let response_stream = tcp
+                        .map(move |socket| {
+                            let (req_sink, res_stream) = Http.framed(socket).split();
+
+                            let (mut parts, _) = request.into_parts();
+                            parts.uri = "/".parse::<Uri>().unwrap();
+
+                            let newreq = HttpRequest::from_parts(parts, ());
+
+                            let blah = req_sink
+                                .send(newreq)
+                                .and_then(|req_sink| req_sink.flush())
+                                .then(|_| Ok(()));
+
+                            tokio::spawn(blah);
+
+                            res_stream
+                        }).flatten_stream();
+
+                    tokio::run({
+                        response_stream
+                            .for_each(move |_chunk| Ok(()))
+                            .map_err(|_e| ())
+                    });
+                    // tcp.map_err(|_| ())
+                    //     .and_then(|socket| {
+                    //         let (req_sink, res_stream) = Http.framed(socket).split();
+
+                    //         req_sink.send(request)
+                    //     })
+
+                    // .then(move |result| sink.unbounded_send(result).map_err(|_| ()))
+
+                    // let delay = Duration::from_secs(2);
+                    // thread::sleep(delay);
+
+                    // let work = futures::future::ok::<String, ()>("output".to_string());
+                    // let proxy = work.then(move |result| sink.unbounded_send(result).map_err(|_| ()));
+                    // tokio::run(blah);
+                    Box::new(future::ok(HttpResponse::new("Testing".to_string())))
                 }
+            } else {
+                Box::new(future::err("".to_string()))
+            }
+        // });
 
-                let delay = Duration::from_secs(2);
-                thread::sleep(delay);
+        // let mut buffer = Vec::new();
+        // let response = stream
+        //     .fold(buffer, |mut buffer, res| {
+        //         if let Ok(response) = res {
+        //             buffer.extend_from_slice(response.as_bytes());
+        //         }
+        //         future::ok(buffer)
+        //     }).map_err(|_| "blah".to_string())
+        //     .map(move |res| {
+        //         let val = String::from_utf8_lossy(&res).into_owned();
+        //         util::response(val, StatusCode::OK)
+        //     });
 
-                let work = futures::future::ok::<String, ()>("output".to_string());
-                let proxy = work.then(move |result| sink.unbounded_send(result).map_err(|_| ()));
-                tokio::run(proxy);
-            });
-
-            let mut buffer = Vec::new();
-            let response = stream
-                .fold(buffer, |mut buffer, res| {
-                    if let Ok(response) = res {
-                        buffer.extend_from_slice(response.as_bytes());
-                    }
-                    future::ok(buffer)
-                }).map_err(|_| "blah".to_string())
-                .map(move |res| {
-                    let val = String::from_utf8_lossy(&res).into_owned();
-                    util::response(val, StatusCode::OK)
-                });
-
-            Box::new(response)
+        // Box::new(response)
         } else {
             let mut response = HttpResponse::builder();
             if let Some(headers) = self.response.headers() {

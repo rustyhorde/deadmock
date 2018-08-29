@@ -44,11 +44,11 @@ extern crate toml;
 extern crate tomlenv;
 extern crate uuid;
 
+mod codec;
 mod environment;
 mod error;
 mod handler;
 mod header;
-mod http;
 mod matcher;
 mod run;
 mod util;
