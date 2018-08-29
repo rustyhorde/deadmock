@@ -1,8 +1,11 @@
+cargo-features = ["edition"]
+
 [package]
 authors = ["Jason Ozias <jason.g.ozias@gmail.com>"]
 build = "build.rs"
 description = "API Mocking and Virtualization"
 documentation = "https://docs.rs/deadmock"
+edition = "2018"
 homepage = "https://github.com/rustyhorde/deadmock"
 keywords = [
     "API",
