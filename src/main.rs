@@ -8,7 +8,8 @@
 
 //! `deadmock` 0.1.0
 #![deny(missing_docs)]
-#![feature(duration_as_u128, try_from)]
+#![feature(duration_as_u128, rust_2018_preview, try_from, uniform_paths)]
+
 #[macro_use]
 extern crate cached;
 #[macro_use]
