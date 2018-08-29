@@ -37,11 +37,12 @@ serde_json = "1"
 slog-async = "2"
 slog-term = "2"
 slog-try = "0"
-tokio = "0"
+tokio-async-await = "0"
 tokio-codec = "0"
 tokio-io = "0"
 toml = "0"
 tomlenv = "0"
+hyper = "0.12.9"
 
 [dependencies.slog]
 version = "2"

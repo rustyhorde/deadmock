@@ -8,7 +8,7 @@
 
 //! `deadmock` header
 use colored::{Color, Colorize};
-use rand::{self, Rng};
+use rand::Rng;
 use slog::Logger;
 use std::convert::TryFrom;
 use tokio::net::TcpStream;

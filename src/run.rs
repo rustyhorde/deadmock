@@ -8,11 +8,12 @@
 
 //! `deadmock` runtime
 use clap::{App, Arg};
-use environment::Env;
-use error::Result;
-use handler::Handler;
-use header;
-use matcher::{Mappings, Matcher};
+use crate::environment::Env;
+use crate::error::Result;
+use crate::handler::Handler;
+use crate::header;
+use crate::matcher::{Mappings, Matcher};
+use crate::util;
 use slog::{Drain, Level, Logger};
 use slog_async::Async;
 use slog_term::{CompactFormat, TermDecorator};
@@ -20,12 +21,9 @@ use std::fs::File;
 use std::io::{BufReader, Read};
 use std::net::SocketAddr;
 use std::path::Path;
-use tokio;
 use tokio::net::TcpListener;
 use tokio::prelude::Stream;
-use toml;
 use tomlenv::{Environment, Environments};
-use util;
 use uuid::Uuid;
 /// CLI Runtime
 pub fn run() -> Result<i32> {

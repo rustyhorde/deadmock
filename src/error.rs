@@ -9,14 +9,14 @@
 //! `deadmock` errors
 error_chain!{
     foreign_links {
-        AddrParse(::std::net::AddrParseError);
-        Curl(::curl::Error);
-        Fmt(::std::fmt::Error);
-        Http(::http_types::Error);
-        InvalidStatusCode(::http_types::status::InvalidStatusCode);
-        Io(::std::io::Error);
-        Json(::serde_json::Error);
-        TomlDe(::toml::de::Error);
-        TomlEnv(::tomlenv::Error);
+        AddrParse(std::net::AddrParseError);
+        Curl(curl::Error);
+        Fmt(std::fmt::Error);
+        Http(crate::http_types::Error);
+        InvalidStatusCode(crate::http_types::status::InvalidStatusCode);
+        Io(std::io::Error);
+        Json(serde_json::Error);
+        TomlDe(toml::de::Error);
+        TomlEnv(tomlenv::Error);
     }
 }

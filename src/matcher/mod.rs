@@ -8,20 +8,18 @@
 
 //! `deadmock` configuration
 use cached::UnboundCache;
-use codec::outbound::Http;
-use error::Result;
-use futures::{future, Future, Sink, Stream};
-use http_types::{Request as HttpRequest, Response as HttpResponse, StatusCode, Uri};
-use serde_json;
+use crate::error::Result;
+use crate::util;
+use futures::{future, Future};
+use http::{Request as HttpRequest, Response as HttpResponse, StatusCode};
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::fs::File;
 use std::io::{BufReader, Read};
+use std::net::{SocketAddr, ToSocketAddrs};
 use std::path::Path;
-use tokio;
 use tokio::net::TcpStream;
-use tokio_codec::Decoder;
-use util;
+use tokio::prelude::{AsyncReadExt, AsyncWriteExt};
 use uuid::Uuid;
 
 mod request;
@@ -116,77 +114,19 @@ impl Matcher {
         request: HttpRequest<()>,
     ) -> Box<Future<Item = HttpResponse<String>, Error = String> + Send> {
         if let Some(proxy_base_url) = self.response.proxy_base_url() {
-            // let (sink, stream) = futures::sync::mpsc::unbounded();
-            let pbu_clone = proxy_base_url.clone();
+            let _full_url = format!("{}/{}", proxy_base_url, request.uri());
+            let mut addrs = ("ecsb-test.kroger.com", 80).to_socket_addrs().expect("Unable to generate SocketAddr");
 
-            // thread::spawn(move || {
-            let parts: Vec<&str> = pbu_clone.split("://").collect();
-            if let Ok(addrs) = util::resolve(parts[0], parts[1]) {
-                if addrs.is_empty() {
-                    Box::new(future::err("".to_string()))
-                } else {
-                    let tcp = TcpStream::connect(&addrs[0]);
-
-                    let response_stream = tcp
-                        .map(move |socket| {
-                            let (req_sink, res_stream) = Http.framed(socket).split();
-
-                            let (mut parts, _) = request.into_parts();
-                            parts.uri = "/".parse::<Uri>().unwrap();
-
-                            let newreq = HttpRequest::from_parts(parts, ());
-
-                            let blah = req_sink
-                                .send(newreq)
-                                .and_then(|req_sink| req_sink.flush())
-                                .then(|_| Ok(()));
-
-                            tokio::spawn(blah);
-
-                            res_stream
-                        }).flatten_stream();
-
-                    tokio::run({
-                        response_stream
-                            .for_each(move |_chunk| Ok(()))
-                            .map_err(|_e| ())
-                    });
-                    // tcp.map_err(|_| ())
-                    //     .and_then(|socket| {
-                    //         let (req_sink, res_stream) = Http.framed(socket).split();
-
-                    //         req_sink.send(request)
-                    //     })
-
-                    // .then(move |result| sink.unbounded_send(result).map_err(|_| ()))
-
-                    // let delay = Duration::from_secs(2);
-                    // thread::sleep(delay);
-
-                    // let work = futures::future::ok::<String, ()>("output".to_string());
-                    // let proxy = work.then(move |result| sink.unbounded_send(result).map_err(|_| ()));
-                    // tokio::run(blah);
-                    Box::new(future::ok(HttpResponse::new("Testing".to_string())))
-                }
-            } else {
-                Box::new(future::err("".to_string()))
+            if let Some(addr) = addrs.next() {
+                tokio::spawn_async(async move {
+                    match await!(run_client(&addr)) {
+                        Ok(_) => {},
+                        Err(e) => eprintln!("grrrrr: {}", e),
+                    }
+                });
             }
-        // });
 
-        // let mut buffer = Vec::new();
-        // let response = stream
-        //     .fold(buffer, |mut buffer, res| {
-        //         if let Ok(response) = res {
-        //             buffer.extend_from_slice(response.as_bytes());
-        //         }
-        //         future::ok(buffer)
-        //     }).map_err(|_| "blah".to_string())
-        //     .map(move |res| {
-        //         let val = String::from_utf8_lossy(&res).into_owned();
-        //         util::response(val, StatusCode::OK)
-        //     });
-
-        // Box::new(response)
+            Box::new(futures::future::ok(HttpResponse::new("testing".to_string())))
         } else {
             let mut response = HttpResponse::builder();
             if let Some(headers) = self.response.headers() {
@@ -230,4 +170,32 @@ impl fmt::Display for Matcher {
         writeln!(f);
         write!(f, "{}", out)
     }
+}
+
+const MESSAGES: &[&str] = &[
+    "GET /mobilecheckout/healthcheck HTTP/1.1\r\nHost: ecsb-test.kroger.com\r\nProxy-Authorization: Basic a29uODExNjpLZW56aWUyMkVsbGll\r\n\r\n",
+];
+
+async fn run_client(addr: &SocketAddr) -> std::io::Result<()> {
+    println!("Connecting to {}", addr.to_string());
+    let mut stream = await!(TcpStream::connect(addr))?;
+
+    // Buffer to read into
+    let mut buf = [0; 100000];
+
+    for msg in MESSAGES {
+        println!(" > write = {:?}", msg);
+
+        // Write the message to the server
+        await!(stream.write_all_async(msg.as_bytes()))?;
+
+        // Read the message back from the server
+        let read = await!(stream.read_async(&mut buf))?;
+
+        println!(" > read = {} bytes", read);
+        let result = String::from_utf8_lossy(&buf[..read]);
+        println!(" > result = {}", result);
+    }
+
+    Ok(())
 }

@@ -7,17 +7,16 @@
 // modified, or distributed except according to those terms.
 
 //! `deadmock` request/response handler.
-use codec::inbound::Http;
-use http_types::{Request, Response, StatusCode};
-use matcher::Mappings;
+use crate::codec::inbound::Http;
+use crate::http_types::{Request, Response, StatusCode};
+use crate::matcher::Mappings;
+use crate::util;
 use slog::Logger;
 use std::io;
 use std::sync::{Arc, Mutex};
-use tokio;
 use tokio::net::TcpStream;
 use tokio::prelude::{Future, Sink, Stream};
 use tokio_codec::Decoder;
-use util;
 
 #[derive(Debug)]
 pub struct Handler {

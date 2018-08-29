@@ -7,11 +7,10 @@
 // modified, or distributed except according to those terms.
 
 //! `deadmock` utils.
-use error::Result;
+use crate::error::Result;
+use crate::http_types::header::{HeaderValue, CONTENT_TYPE};
+use crate::http_types::{Response, StatusCode};
 use futures::{future, Future};
-use http_types::header::{HeaderValue, CONTENT_TYPE};
-use http_types::{Response, StatusCode};
-use serde_json;
 use std::fmt;
 use std::fs::{self, DirEntry};
 use std::net::{SocketAddr, ToSocketAddrs};

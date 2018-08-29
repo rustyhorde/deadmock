@@ -8,7 +8,14 @@
 
 //! `deadmock` 0.1.0
 #![deny(missing_docs)]
-#![feature(duration_as_u128, rust_2018_preview, try_from, uniform_paths)]
+#![feature(
+    await_macro,
+    async_await,
+    duration_as_u128,
+    futures_api,
+    try_from,
+    uniform_paths
+)]
 
 #[macro_use]
 extern crate cached;
@@ -24,6 +31,8 @@ extern crate serde_derive;
 extern crate slog;
 #[macro_use]
 extern crate slog_try;
+#[macro_use]
+extern crate tokio;
 
 extern crate bytes;
 extern crate chrono;
@@ -38,7 +47,6 @@ extern crate serde;
 extern crate serde_json;
 extern crate slog_async;
 extern crate slog_term;
-extern crate tokio;
 extern crate tokio_codec;
 extern crate tokio_io;
 extern crate toml;

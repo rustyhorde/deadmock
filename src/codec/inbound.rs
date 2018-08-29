@@ -9,9 +9,8 @@
 //! `deadmock` inbound codecs
 use bytes::BytesMut;
 use chrono::Utc;
-use http_types::header::HeaderValue;
-use http_types::{Request, Response, Version};
-use httparse;
+use crate::http_types::header::HeaderValue;
+use crate::http_types::{Request, Response, Version};
 use std::fmt;
 use std::io;
 use tokio_io::codec::{Decoder, Encoder};

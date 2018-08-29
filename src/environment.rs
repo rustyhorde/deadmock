@@ -7,9 +7,9 @@
 // modified, or distributed except according to those terms.
 
 //! `deadmock` environment config
+use crate::util;
 use std::env;
 use std::fmt;
-use util;
 
 /// The runtime environment for deadmock.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Getters, Hash, Eq, PartialEq, Serialize)]

@@ -8,8 +8,7 @@
 
 //! `deadmock` outbound codecs
 use bytes::BytesMut;
-use http_types::{Request, Response, StatusCode, Version};
-use httparse;
+use crate::http_types::{Request, Response, StatusCode, Version};
 use std::fmt;
 use std::io;
 use tokio_io::codec::{Decoder, Encoder};
