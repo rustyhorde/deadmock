@@ -11,7 +11,7 @@ use cached::UnboundCache;
 use crate::error::Result;
 use crate::http_types::header::{CONTENT_LENGTH, HeaderName, HeaderValue};
 use crate::util;
-use futures::{future, Future};
+use futures::{future, Future, Stream};
 use http::{Request as HttpRequest, Response as HttpResponse, StatusCode};
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
@@ -116,18 +116,24 @@ impl Matcher {
     ) -> Box<Future<Item = HttpResponse<String>, Error = String> + Send> {
         if let Some(proxy_base_url) = self.response.proxy_base_url() {
             let _full_url = format!("{}/{}", proxy_base_url, request.uri());
-            let mut addrs = ("espn.go.com", 80).to_socket_addrs().expect("Unable to generate SocketAddr");
+            // let mut addrs = ("espn.go.com", 80).to_socket_addrs().expect("Unable to generate SocketAddr");
+            let mut addrs = ("ecsb-test.kroger.com", 80).to_socket_addrs().expect("Unable to generate SocketAddr");
+            let (tx, rx) = futures::sync::mpsc::unbounded();
 
             if let Some(addr) = addrs.next() {
                 tokio::spawn_async(async move {
-                    match await!(run_client(&addr)) {
-                        Ok(_) => {},
-                        Err(e) => eprintln!("grrrrr: {}", e),
-                    }
+                    tx.unbounded_send(await!(run_client(&addr))).expect("Unable to send upstream response!");
                 });
             }
 
-            Box::new(futures::future::ok(HttpResponse::new("testing".to_string())))
+            Box::new(rx.fold(String::new(), |mut buffer, res| {
+                match res {
+                    Ok(val) => buffer.push_str(&val),
+                    Err(e) => buffer.push_str(&e.to_string()),
+                }
+                futures::future::ok(buffer)
+            }).map_err(|_| "Error processing upstream response".to_string())
+            .map(|res| HttpResponse::new(res)))
         } else {
             let mut response = HttpResponse::builder();
             if let Some(headers) = self.response.headers() {
@@ -157,9 +163,7 @@ impl Matcher {
 
             match response.body(body) {
                 Ok(response) => Box::new(future::ok(response)),
-                Err(e) => {
-                    util::error_response_fut(format!("{}", e), StatusCode::INTERNAL_SERVER_ERROR)
-                }
+                Err(e) => util::error_response_fut(format!("{}", e), StatusCode::INTERNAL_SERVER_ERROR),
             }
         }
     }
@@ -174,11 +178,11 @@ impl fmt::Display for Matcher {
 }
 
 const MESSAGES: &[&str] = &[
-    // "GET / HTTP/1.1\r\nHost: www.espn.com\r\nProxy-Authorization: Basic a29uODExNjpLZW56aWUyMkVsbGll\r\n\r\n",
-    "GET / HTTP/1.1\r\nHost: www.espn.com\r\n\r\n",
+    "GET /mobilecheckout/healthcheck HTTP/1.1\r\nHost: ecsb-test.kroger.com\r\nProxy-Authorization: Basic a29uODExNjpLZW56aWUyMkVsbGll\r\n\r\n",
+    // "GET / HTTP/1.1\r\nHost: www.espn.com\r\n\r\n",
 ];
 
-async fn run_client(addr: &SocketAddr) -> std::io::Result<()> {
+async fn run_client(addr: &SocketAddr) -> std::io::Result<String> {
     let mut stream = await!(TcpStream::connect(addr))?;
 
     // Buffer to read into
@@ -197,7 +201,7 @@ async fn run_client(addr: &SocketAddr) -> std::io::Result<()> {
                 break
             }
             let mut headers = [None; 16];
-            let (_reason, version, amt) = {
+            let (version, amt) = {
                 let mut parsed_headers = [httparse::EMPTY_HEADER; 16];
                 let mut r = httparse::Response::new(&mut parsed_headers);
                 let status = r.parse(&buf).map_err(|e| {
@@ -222,17 +226,10 @@ async fn run_client(addr: &SocketAddr) -> std::io::Result<()> {
                     headers[i] = Some((k, v));
                 }
 
-                (
-                    toslice(r.reason.unwrap().as_bytes()),
-                    r.version.unwrap(),
-                    amt,
-                )
+                (r.version.unwrap(), amt)
             };
             if version != 1 {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "only HTTP/1.1 accepted",
-                ));
+                return Err(std::io::Error::new( std::io::ErrorKind::Other, "only HTTP/1.1 accepted"));
             }
 
             let data = &buf[..amt];
@@ -266,5 +263,6 @@ async fn run_client(addr: &SocketAddr) -> std::io::Result<()> {
         }
     }
 
-    Ok(())
+    let response = String::from_utf8_lossy(&total).into_owned();
+    Ok(response)
 }
