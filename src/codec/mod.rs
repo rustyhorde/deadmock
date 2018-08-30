@@ -9,4 +9,4 @@
 //! `deadmock` codecs
 
 pub mod inbound;
-pub mod outbound;
+// pub mod outbound;

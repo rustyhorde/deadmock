@@ -88,6 +88,7 @@ pub fn error_response(message: String, status_code: StatusCode) -> Response<Stri
     Response::new(r#"{ "message": "Unable to process body" }"#.to_string())
 }
 
+#[allow(dead_code)]
 pub fn resolve(protocol: &str, host: &str) -> Result<Vec<SocketAddr>> {
     let port = match protocol {
         "http" => 80,

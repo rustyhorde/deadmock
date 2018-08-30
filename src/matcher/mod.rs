@@ -9,6 +9,7 @@
 //! `deadmock` configuration
 use cached::UnboundCache;
 use crate::error::Result;
+use crate::http_types::header::{CONTENT_LENGTH, HeaderName, HeaderValue};
 use crate::util;
 use futures::{future, Future};
 use http::{Request as HttpRequest, Response as HttpResponse, StatusCode};
@@ -111,11 +112,11 @@ impl Matcher {
 
     pub fn http_response(
         &self,
-        request: HttpRequest<()>,
+        request: &HttpRequest<()>,
     ) -> Box<Future<Item = HttpResponse<String>, Error = String> + Send> {
         if let Some(proxy_base_url) = self.response.proxy_base_url() {
             let _full_url = format!("{}/{}", proxy_base_url, request.uri());
-            let mut addrs = ("ecsb-test.kroger.com", 80).to_socket_addrs().expect("Unable to generate SocketAddr");
+            let mut addrs = ("espn.go.com", 80).to_socket_addrs().expect("Unable to generate SocketAddr");
 
             if let Some(addr) = addrs.next() {
                 tokio::spawn_async(async move {
@@ -173,28 +174,96 @@ impl fmt::Display for Matcher {
 }
 
 const MESSAGES: &[&str] = &[
-    "GET /mobilecheckout/healthcheck HTTP/1.1\r\nHost: ecsb-test.kroger.com\r\nProxy-Authorization: Basic a29uODExNjpLZW56aWUyMkVsbGll\r\n\r\n",
+    // "GET / HTTP/1.1\r\nHost: www.espn.com\r\nProxy-Authorization: Basic a29uODExNjpLZW56aWUyMkVsbGll\r\n\r\n",
+    "GET / HTTP/1.1\r\nHost: www.espn.com\r\n\r\n",
 ];
 
 async fn run_client(addr: &SocketAddr) -> std::io::Result<()> {
-    println!("Connecting to {}", addr.to_string());
     let mut stream = await!(TcpStream::connect(addr))?;
 
     // Buffer to read into
-    let mut buf = [0; 100000];
+    let mut buf = [0; 200_000];
 
+    let mut total = Vec::new();
     for msg in MESSAGES {
-        println!(" > write = {:?}", msg);
-
         // Write the message to the server
         await!(stream.write_all_async(msg.as_bytes()))?;
 
         // Read the message back from the server
-        let read = await!(stream.read_async(&mut buf))?;
+        'outer: loop {
+            let read = await!(stream.read_async(&mut buf))?;
 
-        println!(" > read = {} bytes", read);
-        let result = String::from_utf8_lossy(&buf[..read]);
-        println!(" > result = {}", result);
+            if read == 0 {
+                break
+            }
+            let mut headers = [None; 16];
+            let (_reason, version, amt) = {
+                let mut parsed_headers = [httparse::EMPTY_HEADER; 16];
+                let mut r = httparse::Response::new(&mut parsed_headers);
+                let status = r.parse(&buf).map_err(|e| {
+                    let msg = format!("failed to parse http response: {:?}", e);
+                    std::io::Error::new(std::io::ErrorKind::Other, msg)
+                })?;
+
+                let amt = match status {
+                    httparse::Status::Complete(amt) => amt,
+                    httparse::Status::Partial => continue 'outer,
+                };
+
+                let toslice = |a: &[u8]| {
+                    let start = a.as_ptr() as usize - buf.as_ptr() as usize;
+                    assert!(start < buf.len());
+                    (start, start + a.len())
+                };
+
+                for (i, header) in r.headers.iter().enumerate() {
+                    let k = toslice(header.name.as_bytes());
+                    let v = toslice(header.value);
+                    headers[i] = Some((k, v));
+                }
+
+                (
+                    toslice(r.reason.unwrap().as_bytes()),
+                    r.version.unwrap(),
+                    amt,
+                )
+            };
+            if version != 1 {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "only HTTP/1.1 accepted",
+                ));
+            }
+
+            let data = &buf[..amt];
+
+            let mut content_length: usize = 0;
+            for header in &headers {
+                let (k, v) = match *header {
+                    Some((ref k, ref v)) => (k, v),
+                    None => break,
+                };
+                if let Ok(value) = HeaderValue::from_bytes(&data[v.0..v.1]) {
+                    if let Ok(name) = HeaderName::from_bytes(&data[k.0..k.1]) {
+                        if name == CONTENT_LENGTH {
+                            content_length = value.to_str().unwrap().parse::<usize>().expect("unable to parse header value");
+                        }
+                    }
+                }
+            }
+
+            let mut bytes_so_far = read - amt;
+            total.extend_from_slice(&buf[amt..read]);
+
+            while bytes_so_far < content_length {
+                let read = await!(stream.read_async(&mut buf))?;
+
+                bytes_so_far += read;
+                total.extend_from_slice(&buf[..read]);
+            }
+
+            break 'outer
+        }
     }
 
     Ok(())
