@@ -34,24 +34,7 @@ extern crate slog_try;
 #[macro_use]
 extern crate tokio;
 
-extern crate bytes;
-extern crate chrono;
-extern crate clap;
-extern crate colored;
-extern crate curl;
-extern crate futures;
 extern crate http as http_types;
-extern crate httparse;
-extern crate rand;
-extern crate serde;
-extern crate serde_json;
-extern crate slog_async;
-extern crate slog_term;
-extern crate tokio_codec;
-extern crate tokio_io;
-extern crate toml;
-extern crate tomlenv;
-extern crate uuid;
 
 mod codec;
 mod environment;

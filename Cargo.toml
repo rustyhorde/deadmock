@@ -29,6 +29,9 @@ futures = "0.1"
 getset = "0"
 http = "0"
 httparse = "1"
+hyper = "0"
+hyper-proxy = "0"
+hyper-tls = "0"
 lazy_static = "1"
 rand = "0"
 serde = "1"
@@ -57,3 +60,6 @@ features = ["v4", "u128", "serde"]
 
 [build-dependencies]
 vergen = "2"
+
+[patch.crates-io]
+hyper-proxy = { path = "../hyper-proxy" }

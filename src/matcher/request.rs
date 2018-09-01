@@ -7,6 +7,8 @@
 // modified, or distributed except according to those terms.
 
 //! `deadmock` request matching configuration
+use crate::matcher::Header;
+
 #[derive(Clone, Debug, Default, Deserialize, Getters, Hash, Eq, PartialEq, Serialize)]
 pub struct Request {
     #[get = "pub"]
@@ -15,4 +17,7 @@ pub struct Request {
     #[get = "pub"]
     #[serde(skip_serializing_if = "Option::is_none")]
     url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[get = "pub"]
+    headers: Option<Vec<Header>>,
 }

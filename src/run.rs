@@ -44,6 +44,11 @@ pub fn run() -> Result<i32> {
                 .short("e")
                 .long("envpath")
                 .help("Specify the env file path"),
+        ).arg(
+            Arg::with_name("proxy")
+                .short("p")
+                .long("proxy")
+                .help("Use a proxy"),
         ).get_matches();
 
     // Setup the environment.
@@ -61,6 +66,9 @@ pub fn run() -> Result<i32> {
         2 => Level::Debug,
         3 | _ => Level::Trace,
     };
+
+    // Are we using a proxy.
+    let use_proxy = matches.is_present("proxy");
 
     let stdout_decorator = TermDecorator::new().stdout().build();
     let stdout_drain = CompactFormat::new(stdout_decorator).build().fuse();
@@ -118,7 +126,7 @@ pub fn run() -> Result<i32> {
             .for_each(move |socket| {
                 header::socket_info(&socket, &process_stdout);
 
-                Handler::new(socket, mappings.clone())
+                Handler::new(socket, mappings.clone(), use_proxy)
                     .stdout(process_stdout.clone())
                     .stderr(process_stderr.clone())
                     .handle();

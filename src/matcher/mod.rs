@@ -9,18 +9,20 @@
 //! `deadmock` configuration
 use cached::UnboundCache;
 use crate::error::Result;
-use crate::http_types::header::{CONTENT_LENGTH, HeaderName, HeaderValue};
 use crate::util;
 use futures::{future, Future, Stream};
 use http::{Request as HttpRequest, Response as HttpResponse, StatusCode};
+use hyper::{Client, Request as HyperRequest};
+use hyper::client::HttpConnector;
+use hyper_proxy::{Intercept, Proxy, ProxyConnector};
+use hyper_tls::HttpsConnector;
+use slog::Logger;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::fs::File;
 use std::io::{BufReader, Read};
-use std::net::{SocketAddr, ToSocketAddrs};
 use std::path::Path;
-use tokio::net::TcpStream;
-use tokio::prelude::{AsyncReadExt, AsyncWriteExt};
+use tokio::prelude::FutureExt;
 use uuid::Uuid;
 
 mod request;
@@ -28,6 +30,14 @@ mod response;
 
 pub use self::request::Request;
 pub use self::response::Response;
+
+#[derive(Clone, Debug, Default, Deserialize, Getters, Hash, Eq, PartialEq, Serialize)]
+pub struct Header {
+    #[get = "pub"]
+    key: String,
+    #[get = "pub"]
+    value: String,
+}
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, Getters, MutGetters, PartialEq, Serialize)]
 pub struct Mappings {
@@ -113,18 +123,34 @@ impl Matcher {
     pub fn http_response(
         &self,
         request: &HttpRequest<()>,
+        stdout: Option<Logger>,
+        stderr: Option<Logger>,
+        use_proxy: bool,
     ) -> Box<Future<Item = HttpResponse<String>, Error = String> + Send> {
         if let Some(proxy_base_url) = self.response.proxy_base_url() {
-            let _full_url = format!("{}/{}", proxy_base_url, request.uri());
-            // let mut addrs = ("espn.go.com", 80).to_socket_addrs().expect("Unable to generate SocketAddr");
-            let mut addrs = ("ecsb-test.kroger.com", 80).to_socket_addrs().expect("Unable to generate SocketAddr");
+            let full_url = format!("{}{}", proxy_base_url, request.uri());
             let (tx, rx) = futures::sync::mpsc::unbounded();
+            let headers = self.response.additional_proxy_request_headers().clone();
 
-            if let Some(addr) = addrs.next() {
-                tokio::spawn_async(async move {
-                    tx.unbounded_send(await!(run_client(&addr))).expect("Unable to send upstream response!");
-                });
-            }
+            tokio::spawn_async(async move {
+                if use_proxy {
+                    let proxy_uri = "http://kon8116:Kenzie22Ellie@127.0.0.1:3128".parse().expect("Unable to parse proxy URI");
+                    let proxy = Proxy::new(Intercept::All, proxy_uri);
+                    let connector = HttpConnector::new(4);
+                    let proxy_connector = ProxyConnector::from_proxy(connector, proxy).expect("Unable to create proxy connector!");
+                    let client = Client::builder().set_host(true).build::<_, hyper::Body>(proxy_connector);
+
+                    await!(run_request(client, tx, full_url, stdout, stderr, headers));
+                } else if full_url.starts_with("https") {
+                    let https_connector = HttpsConnector::new(4).expect("TLS initialization failed");
+                    let client = Client::builder().set_host(true).build::<_, hyper::Body>(https_connector);
+                    await!(run_request(client, tx, full_url, stdout, stderr, headers));
+                } else {
+                    let http_connector = HttpConnector::new(4);
+                    let client = Client::builder().set_host(true).build::<_, hyper::Body>(http_connector);
+                    await!(run_request(client, tx, full_url, stdout, stderr, headers));
+                }
+            });
 
             Box::new(rx.fold(String::new(), |mut buffer, res| {
                 match res {
@@ -133,7 +159,7 @@ impl Matcher {
                 }
                 futures::future::ok(buffer)
             }).map_err(|_| "Error processing upstream response".to_string())
-            .map(|res| HttpResponse::new(res)))
+            .map(HttpResponse::new))
         } else {
             let mut response = HttpResponse::builder();
             if let Some(headers) = self.response.headers() {
@@ -177,92 +203,39 @@ impl fmt::Display for Matcher {
     }
 }
 
-const MESSAGES: &[&str] = &[
-    "GET /mobilecheckout/healthcheck HTTP/1.1\r\nHost: ecsb-test.kroger.com\r\nProxy-Authorization: Basic a29uODExNjpLZW56aWUyMkVsbGll\r\n\r\n",
-    // "GET / HTTP/1.1\r\nHost: www.espn.com\r\n\r\n",
-];
+async fn run_request<C>(
+    client: Client<C, hyper::Body>,
+    tx: futures::sync::mpsc::UnboundedSender<std::result::Result<String, String>>,
+    url: String,
+    stdout: Option<Logger>,
+    stderr: Option<Logger>,
+    headers: Option<Vec<Header>>,
+) where C: hyper::client::connect::Connect + Sync + 'static {
+    let response = await!({
+        try_trace!(stdout, "Making request to {}", url);
+        let mut request_builder = HyperRequest::get(url);
 
-async fn run_client(addr: &SocketAddr) -> std::io::Result<String> {
-    let mut stream = await!(TcpStream::connect(addr))?;
-
-    // Buffer to read into
-    let mut buf = [0; 200_000];
-
-    let mut total = Vec::new();
-    for msg in MESSAGES {
-        // Write the message to the server
-        await!(stream.write_all_async(msg.as_bytes()))?;
-
-        // Read the message back from the server
-        'outer: loop {
-            let read = await!(stream.read_async(&mut buf))?;
-
-            if read == 0 {
-                break
+        if let Some(headers) = headers {
+            for header in headers {
+                request_builder.header(&header.key()[..], &header.value()[..]);
             }
-            let mut headers = [None; 16];
-            let (version, amt) = {
-                let mut parsed_headers = [httparse::EMPTY_HEADER; 16];
-                let mut r = httparse::Response::new(&mut parsed_headers);
-                let status = r.parse(&buf).map_err(|e| {
-                    let msg = format!("failed to parse http response: {:?}", e);
-                    std::io::Error::new(std::io::ErrorKind::Other, msg)
-                })?;
-
-                let amt = match status {
-                    httparse::Status::Complete(amt) => amt,
-                    httparse::Status::Partial => continue 'outer,
-                };
-
-                let toslice = |a: &[u8]| {
-                    let start = a.as_ptr() as usize - buf.as_ptr() as usize;
-                    assert!(start < buf.len());
-                    (start, start + a.len())
-                };
-
-                for (i, header) in r.headers.iter().enumerate() {
-                    let k = toslice(header.name.as_bytes());
-                    let v = toslice(header.value);
-                    headers[i] = Some((k, v));
-                }
-
-                (r.version.unwrap(), amt)
-            };
-            if version != 1 {
-                return Err(std::io::Error::new( std::io::ErrorKind::Other, "only HTTP/1.1 accepted"));
-            }
-
-            let data = &buf[..amt];
-
-            let mut content_length: usize = 0;
-            for header in &headers {
-                let (k, v) = match *header {
-                    Some((ref k, ref v)) => (k, v),
-                    None => break,
-                };
-                if let Ok(value) = HeaderValue::from_bytes(&data[v.0..v.1]) {
-                    if let Ok(name) = HeaderName::from_bytes(&data[k.0..k.1]) {
-                        if name == CONTENT_LENGTH {
-                            content_length = value.to_str().unwrap().parse::<usize>().expect("unable to parse header value");
-                        }
-                    }
-                }
-            }
-
-            let mut bytes_so_far = read - amt;
-            total.extend_from_slice(&buf[amt..read]);
-
-            while bytes_so_far < content_length {
-                let read = await!(stream.read_async(&mut buf))?;
-
-                bytes_so_far += read;
-                total.extend_from_slice(&buf[..read]);
-            }
-
-            break 'outer
         }
-    }
+        let body = request_builder.body(hyper::Body::empty()).expect("Unable to create upstream request");
+        client.request(body).timeout(std::time::Duration::from_secs(10))
+    }).expect("Unable to process upstream response");
 
-    let response = String::from_utf8_lossy(&total).into_owned();
-    Ok(response)
+    let body = await!({
+        response.into_body().map_err(|_| ()).fold(Vec::new(), |mut v, chunk| {
+            v.extend_from_slice(&chunk);
+            futures::future::ok(v)
+        })
+    });
+
+    if let Ok(body) = body {
+        let body_str = String::from_utf8_lossy(&body).into_owned();
+        tx.unbounded_send(Ok(body_str)).expect("Unable to send upstream response!");
+    } else {
+        try_error!(stderr, "Unable to process upstream response!");
+        tx.unbounded_send(Err("Unable to process upstream response!".to_string())).expect("");
+    }
 }

@@ -2,10 +2,10 @@ priority = 10
 
 [request]
 method = "GET"
-url = "/mobilecheckout/healthcheck"
+url = "/"
 
 [response]
-proxy_base_url = "http://ecsb-test.kroger.com"
+proxy_base_url = "https://jasonozias.com"
 
 [[response.additional_proxy_request_headers]]
 key = "User-Agent"

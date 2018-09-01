@@ -7,6 +7,7 @@
 // modified, or distributed except according to those terms.
 
 //! `deadmock` response templating configuration
+use crate::matcher::Header;
 
 #[derive(Clone, Debug, Default, Deserialize, Getters, Hash, Eq, PartialEq, Serialize)]
 pub struct Response {
@@ -25,12 +26,4 @@ pub struct Response {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[get = "pub"]
     additional_proxy_request_headers: Option<Vec<Header>>,
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Getters, Hash, Eq, PartialEq, Serialize)]
-pub struct Header {
-    #[get = "pub"]
-    key: String,
-    #[get = "pub"]
-    value: String,
 }

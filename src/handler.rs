@@ -22,16 +22,18 @@ use tokio_codec::Decoder;
 pub struct Handler {
     stdout: Option<Logger>,
     stderr: Option<Logger>,
+    use_proxy: bool,
     stream: TcpStream,
     static_mappings: Mappings,
     dynamic_mappings: Arc<Mutex<Mappings>>,
 }
 
 impl Handler {
-    pub fn new(stream: TcpStream, static_mappings: Mappings) -> Self {
+    pub fn new(stream: TcpStream, static_mappings: Mappings, use_proxy: bool) -> Self {
         Self {
             stdout: None,
             stderr: None,
+            use_proxy,
             stream,
             static_mappings,
             dynamic_mappings: Arc::new(Mutex::new(Mappings::new())),
@@ -55,26 +57,28 @@ impl Handler {
         // that can be used independently (even on different tasks or threads).
         let (tx, rx) = Http.framed(self.stream).split();
 
-        // Map all requests into responses and send them back to the client.
+        // Clone all the things....
         let response_stdout = self.stdout.clone();
         let response_stderr = self.stderr.clone();
+        let response_stderr_1 = self.stderr.clone();
         let static_mappings = self.static_mappings.clone();
         let dynamic_mappings = self.dynamic_mappings.clone();
+        let use_proxy_clone = self.use_proxy.clone();
+
+        // Map all requests into responses and send them back to the client.
         let task = tx
             .send_all(rx.and_then(move |req| {
                 respond(
                     req,
+                    use_proxy_clone,
                     response_stdout.clone(),
+                    response_stderr.clone(),
                     static_mappings.clone(),
                     dynamic_mappings.clone(),
                 ).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
             })).then(move |res| {
                 if let Err(e) = res {
-                    try_error!(
-                        response_stderr,
-                        "failed to process connection; error = {}",
-                        e
-                    );
+                    try_error!(response_stderr_1, "failed to process connection; error = {}", e);
                 }
 
                 Ok(())
@@ -92,13 +96,15 @@ impl Handler {
 #[cfg_attr(feature = "cargo-clippy", allow(needless_pass_by_value))]
 fn respond(
     request: Request<()>,
+    use_proxy: bool,
     stdout: Option<Logger>,
+    stderr: Option<Logger>,
     static_mappings: Mappings,
     dynamic_mappings: Arc<Mutex<Mappings>>,
 ) -> Box<Future<Item = Response<String>, Error = String> + Send> {
     if let Ok(matched) = static_mappings.get_match(&request) {
         try_trace!(stdout, "{}", matched);
-        matched.http_response(&request)
+        matched.http_response(&request, stdout, stderr, use_proxy)
     } else {
         let locked_dynamic_mappings = match dynamic_mappings.lock() {
             Ok(guard) => guard,
@@ -107,8 +113,9 @@ fn respond(
 
         if let Ok(matched) = locked_dynamic_mappings.get_match(&request) {
             try_trace!(stdout, "{}", matched);
-            matched.http_response(&request)
+            matched.http_response(&request, stdout, stderr, use_proxy)
         } else {
+            try_error!(stderr, "No mapping found");
             util::error_response_fut("No mapping found".to_string(), StatusCode::NOT_FOUND)
         }
     }
