@@ -37,6 +37,7 @@ extern crate tokio;
 extern crate http as http_types;
 
 mod codec;
+mod config;
 mod environment;
 mod error;
 mod handler;

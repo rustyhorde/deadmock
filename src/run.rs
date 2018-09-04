@@ -8,6 +8,7 @@
 
 //! `deadmock` runtime
 use clap::{App, Arg};
+use crate::config::ProxyConfig;
 use crate::environment::Env;
 use crate::error::Result;
 use crate::handler::Handler;
@@ -25,6 +26,7 @@ use tokio::net::TcpListener;
 use tokio::prelude::Stream;
 use tomlenv::{Environment, Environments};
 use uuid::Uuid;
+
 /// CLI Runtime
 pub fn run() -> Result<i32> {
     header::header();
@@ -48,7 +50,26 @@ pub fn run() -> Result<i32> {
             Arg::with_name("proxy")
                 .short("p")
                 .long("proxy")
+                .requires("proxy-url")
                 .help("Use a proxy"),
+        ).arg(
+            Arg::with_name("proxy-url")
+                .long("proxy-url")
+                .takes_value(true)
+                .value_name("PROXY_URL")
+                .help("Your proxy url, if applicable"),
+        ).arg(
+            Arg::with_name("proxy-username")
+                .long("proxy-username")
+                .takes_value(true)
+                .value_name("PROXY_USER")
+                .help("Your proxy username, if applicable"),
+        ).arg(
+            Arg::with_name("proxy-password")
+                .long("proxy-password")
+                .takes_value(true)
+                .value_name("PROXY_PASS")
+                .help("Your proxy password, if applicable"),
         ).get_matches();
 
     // Setup the environment.
@@ -59,6 +80,9 @@ pub fn run() -> Result<i32> {
         Environments::from_path(Path::new(env_path), &mut buffer)?;
     let current = envs.current()?;
 
+    // Setup the proxy config.
+    let proxy_config = ProxyConfig::from(&matches.clone());
+
     // Setup the logging.
     let level = match matches.occurrences_of("v") {
         0 => Level::Warning,
@@ -66,9 +90,6 @@ pub fn run() -> Result<i32> {
         2 => Level::Debug,
         3 | _ => Level::Trace,
     };
-
-    // Are we using a proxy.
-    let use_proxy = matches.is_present("proxy");
 
     let stdout_decorator = TermDecorator::new().stdout().build();
     let stdout_drain = CompactFormat::new(stdout_decorator).build().fuse();
@@ -116,17 +137,18 @@ pub fn run() -> Result<i32> {
     let socket_addr = addr.parse::<SocketAddr>()?;
     let listener = TcpListener::bind(&socket_addr)?;
 
+    // Run the server.
     trace!(stdout, "{}", current);
     info!(stdout, "Listening on '{}'", socket_addr);
 
     tokio::run({
         listener
             .incoming()
-            .map_err(move |e| error!(map_err_stderr, "failed to accept socket: {}", e))
+            .map_err(move |e| error!(map_err_stderr, "Failed to accept socket: {}", e))
             .for_each(move |socket| {
                 header::socket_info(&socket, &process_stdout);
 
-                Handler::new(socket, mappings.clone(), use_proxy)
+                Handler::new(socket, mappings.clone(), proxy_config.clone())
                     .stdout(process_stdout.clone())
                     .stderr(process_stderr.clone())
                     .handle();

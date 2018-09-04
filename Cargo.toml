@@ -45,6 +45,7 @@ tokio-codec = "0"
 tokio-io = "0"
 toml = "0"
 tomlenv = "0"
+typed-headers = "0.1.0"
 
 [dependencies.slog]
 version = "2"

@@ -8,6 +8,7 @@
 
 //! `deadmock` configuration
 use cached::UnboundCache;
+use crate::config::ProxyConfig;
 use crate::error::Result;
 use crate::util;
 use futures::{future, Future, Stream};
@@ -23,6 +24,7 @@ use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::Path;
 use tokio::prelude::FutureExt;
+use typed_headers::Credentials;
 use uuid::Uuid;
 
 mod request;
@@ -113,11 +115,17 @@ pub struct Matcher {
 
 impl Matcher {
     pub fn is_match(&self, request: &HttpRequest<()>) -> bool {
-        if let Some(url) = self.request.url() {
-            request.uri().path() == url
-        } else {
-            false
+        let mut matches: Vec<bool> = Vec::new();
+
+        if let Some(method) = self.request.method() {
+            matches.push(request.method().as_str() == &method[..]);
         }
+
+        if let Some(url) = self.request.url() {
+            matches.push(request.uri().path() == url);
+        }
+
+        matches.iter().all(|v| *v)
     }
 
     pub fn http_response(
@@ -125,7 +133,7 @@ impl Matcher {
         request: &HttpRequest<()>,
         stdout: Option<Logger>,
         stderr: Option<Logger>,
-        use_proxy: bool,
+        proxy_config: ProxyConfig,
     ) -> Box<Future<Item = HttpResponse<String>, Error = String> + Send> {
         if let Some(proxy_base_url) = self.response.proxy_base_url() {
             let full_url = format!("{}{}", proxy_base_url, request.uri());
@@ -133,14 +141,25 @@ impl Matcher {
             let headers = self.response.additional_proxy_request_headers().clone();
 
             tokio::spawn_async(async move {
-                if use_proxy {
-                    let proxy_uri = "http://kon8116:Kenzie22Ellie@127.0.0.1:3128".parse().expect("Unable to parse proxy URI");
-                    let proxy = Proxy::new(Intercept::All, proxy_uri);
-                    let connector = HttpConnector::new(4);
-                    let proxy_connector = ProxyConnector::from_proxy(connector, proxy).expect("Unable to create proxy connector!");
-                    let client = Client::builder().set_host(true).build::<_, hyper::Body>(proxy_connector);
+                if *proxy_config.use_proxy() {
+                    if let Some(url_str) = proxy_config.proxy_url() {
+                        let proxy_uri = url_str.parse().expect("Unable to parse proxy URI");
+                        let mut proxy = Proxy::new(Intercept::All, proxy_uri);
+                        if let Some(username) = proxy_config.proxy_username() {
+                            if let Some(password) = proxy_config.proxy_password() {
+                                if let Ok(creds) = Credentials::basic(username, password) {
+                                    proxy.set_authorization(creds);
+                                }
+                            }
+                        }
 
-                    await!(run_request(client, tx, full_url, stdout, stderr, headers));
+                        let connector = HttpConnector::new(4);
+                        let proxy_connector = ProxyConnector::from_proxy(connector, proxy).expect("Unable to create proxy connector!");
+                        let client = Client::builder().set_host(true).build::<_, hyper::Body>(proxy_connector);
+                        await!(run_request(client, tx, full_url, stdout, stderr, headers));
+                    } else {
+                        panic!("Unable to determine proxy url!");
+                    }
                 } else if full_url.starts_with("https") {
                     let https_connector = HttpsConnector::new(4).expect("TLS initialization failed");
                     let client = Client::builder().set_host(true).build::<_, hyper::Body>(https_connector);

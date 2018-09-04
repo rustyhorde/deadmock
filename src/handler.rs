@@ -8,6 +8,7 @@
 
 //! `deadmock` request/response handler.
 use crate::codec::inbound::Http;
+use crate::config::ProxyConfig;
 use crate::http_types::{Request, Response, StatusCode};
 use crate::matcher::Mappings;
 use crate::util;
@@ -22,18 +23,18 @@ use tokio_codec::Decoder;
 pub struct Handler {
     stdout: Option<Logger>,
     stderr: Option<Logger>,
-    use_proxy: bool,
+    proxy_config: ProxyConfig,
     stream: TcpStream,
     static_mappings: Mappings,
     dynamic_mappings: Arc<Mutex<Mappings>>,
 }
 
 impl Handler {
-    pub fn new(stream: TcpStream, static_mappings: Mappings, use_proxy: bool) -> Self {
+    pub fn new(stream: TcpStream, static_mappings: Mappings, proxy_config: ProxyConfig) -> Self {
         Self {
             stdout: None,
             stderr: None,
-            use_proxy,
+            proxy_config,
             stream,
             static_mappings,
             dynamic_mappings: Arc::new(Mutex::new(Mappings::new())),
@@ -63,14 +64,14 @@ impl Handler {
         let response_stderr_1 = self.stderr.clone();
         let static_mappings = self.static_mappings.clone();
         let dynamic_mappings = self.dynamic_mappings.clone();
-        let use_proxy_clone = self.use_proxy.clone();
+        let proxy_config = self.proxy_config.clone();
 
         // Map all requests into responses and send them back to the client.
         let task = tx
             .send_all(rx.and_then(move |req| {
                 respond(
                     req,
-                    use_proxy_clone,
+                    proxy_config.clone(),
                     response_stdout.clone(),
                     response_stderr.clone(),
                     static_mappings.clone(),
@@ -94,9 +95,9 @@ impl Handler {
 /// This function is a map from and HTTP request to a future of a response and
 /// represents the various handling a server might do.
 #[cfg_attr(feature = "cargo-clippy", allow(needless_pass_by_value))]
-fn respond(
+fn respond<'a>(
     request: Request<()>,
-    use_proxy: bool,
+    proxy_config: ProxyConfig,
     stdout: Option<Logger>,
     stderr: Option<Logger>,
     static_mappings: Mappings,
@@ -104,7 +105,7 @@ fn respond(
 ) -> Box<Future<Item = Response<String>, Error = String> + Send> {
     if let Ok(matched) = static_mappings.get_match(&request) {
         try_trace!(stdout, "{}", matched);
-        matched.http_response(&request, stdout, stderr, use_proxy)
+        matched.http_response(&request, stdout, stderr, proxy_config)
     } else {
         let locked_dynamic_mappings = match dynamic_mappings.lock() {
             Ok(guard) => guard,
@@ -113,7 +114,7 @@ fn respond(
 
         if let Ok(matched) = locked_dynamic_mappings.get_match(&request) {
             try_trace!(stdout, "{}", matched);
-            matched.http_response(&request, stdout, stderr, use_proxy)
+            matched.http_response(&request, stdout, stderr, proxy_config)
         } else {
             try_error!(stderr, "No mapping found");
             util::error_response_fut("No mapping found".to_string(), StatusCode::NOT_FOUND)
