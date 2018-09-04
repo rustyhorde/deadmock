@@ -14,6 +14,7 @@ use crate::matcher::Mappings;
 use crate::util;
 use slog::Logger;
 use std::io;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tokio::net::TcpStream;
 use tokio::prelude::{Future, Sink, Stream};
@@ -24,17 +25,19 @@ pub struct Handler {
     stdout: Option<Logger>,
     stderr: Option<Logger>,
     proxy_config: ProxyConfig,
+    files_path: PathBuf,
     stream: TcpStream,
     static_mappings: Mappings,
     dynamic_mappings: Arc<Mutex<Mappings>>,
 }
 
 impl Handler {
-    pub fn new(stream: TcpStream, static_mappings: Mappings, proxy_config: ProxyConfig) -> Self {
+    pub fn new(stream: TcpStream, static_mappings: Mappings, proxy_config: ProxyConfig, files_path: PathBuf) -> Self {
         Self {
             stdout: None,
             stderr: None,
             proxy_config,
+            files_path,
             stream,
             static_mappings,
             dynamic_mappings: Arc::new(Mutex::new(Mappings::new())),
@@ -65,6 +68,7 @@ impl Handler {
         let static_mappings = self.static_mappings.clone();
         let dynamic_mappings = self.dynamic_mappings.clone();
         let proxy_config = self.proxy_config.clone();
+        let files_path = self.files_path.clone();
 
         // Map all requests into responses and send them back to the client.
         let task = tx
@@ -72,6 +76,7 @@ impl Handler {
                 respond(
                     req,
                     proxy_config.clone(),
+                    files_path.clone(),
                     response_stdout.clone(),
                     response_stderr.clone(),
                     static_mappings.clone(),
@@ -95,9 +100,10 @@ impl Handler {
 /// This function is a map from and HTTP request to a future of a response and
 /// represents the various handling a server might do.
 #[cfg_attr(feature = "cargo-clippy", allow(needless_pass_by_value))]
-fn respond<'a>(
+fn respond(
     request: Request<()>,
     proxy_config: ProxyConfig,
+    files_path: PathBuf,
     stdout: Option<Logger>,
     stderr: Option<Logger>,
     static_mappings: Mappings,
@@ -105,7 +111,7 @@ fn respond<'a>(
 ) -> Box<Future<Item = Response<String>, Error = String> + Send> {
     if let Ok(matched) = static_mappings.get_match(&request) {
         try_trace!(stdout, "{}", matched);
-        matched.http_response(&request, stdout, stderr, proxy_config)
+        matched.http_response(&request, stdout, stderr, proxy_config, files_path)
     } else {
         let locked_dynamic_mappings = match dynamic_mappings.lock() {
             Ok(guard) => guard,
@@ -114,7 +120,7 @@ fn respond<'a>(
 
         if let Ok(matched) = locked_dynamic_mappings.get_match(&request) {
             try_trace!(stdout, "{}", matched);
-            matched.http_response(&request, stdout, stderr, proxy_config)
+            matched.http_response(&request, stdout, stderr, proxy_config, files_path)
         } else {
             try_error!(stderr, "No mapping found");
             util::error_response_fut("No mapping found".to_string(), StatusCode::NOT_FOUND)

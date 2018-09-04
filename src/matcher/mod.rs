@@ -22,7 +22,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::fs::File;
 use std::io::{BufReader, Read};
-use std::path::Path;
+use std::path::PathBuf;
 use tokio::prelude::FutureExt;
 use typed_headers::Credentials;
 use uuid::Uuid;
@@ -78,8 +78,7 @@ impl Mappings {
 cached_key_result!{
     STATIC_RESPONSE: UnboundCache<String, String> = UnboundCache::new();
     Key = { filename.to_string() };
-    fn load(filename: &str) -> ::std::result::Result<String, &str> = {
-        let files_path = Path::new("examples").join("files");
+    fn load(files_path: PathBuf, filename: &str) -> ::std::result::Result<String, &str> = {
         let mut buffer = String::new();
         let mut found = false;
 
@@ -134,6 +133,7 @@ impl Matcher {
         stdout: Option<Logger>,
         stderr: Option<Logger>,
         proxy_config: ProxyConfig,
+        files_path: PathBuf,
     ) -> Box<Future<Item = HttpResponse<String>, Error = String> + Send> {
         if let Some(proxy_base_url) = self.response.proxy_base_url() {
             let full_url = format!("{}{}", proxy_base_url, request.uri());
@@ -198,7 +198,7 @@ impl Matcher {
             }
 
             let body = if let Some(body_file_name) = self.response.body_file_name() {
-                match load(body_file_name) {
+                match load(files_path, body_file_name) {
                     Ok(body) => body,
                     Err(e) => e.to_string(),
                 }

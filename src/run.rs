@@ -21,7 +21,7 @@ use slog_term::{CompactFormat, TermDecorator};
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::net::SocketAddr;
-use std::path::Path;
+use std::path::PathBuf;
 use tokio::net::TcpListener;
 use tokio::prelude::Stream;
 use tomlenv::{Environment, Environments};
@@ -44,8 +44,24 @@ pub fn run() -> Result<i32> {
         ).arg(
             Arg::with_name("env_path")
                 .short("e")
-                .long("envpath")
-                .help("Specify the env file path"),
+                .long("env_path")
+                .takes_value(true)
+                .value_name("ENV_PATH")
+                .help("Specify the full path to the 'env' directory"),
+        ).arg(
+            Arg::with_name("files_path")
+                .short("f")
+                .long("files_path")
+                .takes_value(true)
+                .value_name("FILES_PATH")
+                .help("Specify the full path to the 'files' directory"),
+        ).arg(
+            Arg::with_name("mappings_path")
+                .short("m")
+                .long("mappings_path")
+                .takes_value(true)
+                .value_name("MAPPINGS_PATH")
+                .help("Specify the full path to the 'mappings' directory"),
         ).arg(
             Arg::with_name("proxy")
                 .short("p")
@@ -75,9 +91,16 @@ pub fn run() -> Result<i32> {
     // Setup the environment.
     let dm_env = Env::get_env_var();
     let mut buffer = String::new();
-    let env_path = matches.value_of("env_path").unwrap_or_else(|| "env.toml");
+    let env_path = if let Some(env_path) = matches.value_of("env_path") {
+        PathBuf::from(env_path)
+    } else if let Some(config_path) = dirs::config_dir() {
+        config_path.join("deadmock").join("env.toml")
+    } else {
+        PathBuf::from("env.toml")
+    };
+
     let envs: Environments<Environment, Env> =
-        Environments::from_path(Path::new(env_path), &mut buffer)?;
+        Environments::from_path(env_path.as_path(), &mut buffer)?;
     let current = envs.current()?;
 
     // Setup the proxy config.
@@ -117,7 +140,14 @@ pub fn run() -> Result<i32> {
 
     // Load up the static mappings.
     let mut mappings = Mappings::new();
-    let mappings_path = Path::new("examples").join("mappings");
+    let mappings_path = if let Some(mappings_path) = matches.value_of("mappings_path") {
+        PathBuf::from(mappings_path)
+    } else if let Some(config_path) = dirs::config_dir() {
+        config_path.join("deadmock").join("mappings")
+    } else {
+        PathBuf::from("mappings")
+    };
+
     util::visit_dirs(&mappings_path, &mut |entry| -> Result<()> {
         trace!(stdout, "Loading Mapping: {}", entry.path().display());
         let f = File::open(entry.path())?;
@@ -129,6 +159,15 @@ pub fn run() -> Result<i32> {
         mappings.add(Uuid::new_v4(), mapping);
         Ok(())
     })?;
+
+    // Setup the files_path.
+    let files_path = if let Some(files_path) = matches.value_of("files_path") {
+        PathBuf::from(files_path)
+    } else if let Some(config_path) = dirs::config_dir() {
+        config_path.join("deadmock").join("files")
+    } else {
+        PathBuf::from("files")
+    };
 
     // Setup the listener.
     let ip = current.ip().unwrap_or("127.0.0.1");
@@ -148,7 +187,7 @@ pub fn run() -> Result<i32> {
             .for_each(move |socket| {
                 header::socket_info(&socket, &process_stdout);
 
-                Handler::new(socket, mappings.clone(), proxy_config.clone())
+                Handler::new(socket, mappings.clone(), proxy_config.clone(), files_path.clone())
                     .stdout(process_stdout.clone())
                     .stderr(process_stderr.clone())
                     .handle();

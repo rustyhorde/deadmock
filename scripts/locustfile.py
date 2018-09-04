@@ -5,6 +5,10 @@ class UserBehavior(TaskSet):
     def healthcheck(self):
         self.client.get("/mobilecheckout/healthcheck")
 
+    @task(1)
+    def cards(self):
+        self.client.get("/mobilecheckout/api/v1/card/b14d93bd-67c2-aa1b-c973-f6b084403e3e")
+
     @task(10)
     def plaintext(self):
         self.client.get("/plaintext")
