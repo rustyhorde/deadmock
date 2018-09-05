@@ -21,7 +21,7 @@ pub struct ProxyConfig {
     proxy_password: Option<String>,
 }
 
-impl <'a> From<&'a ArgMatches<'a>> for ProxyConfig {
+impl<'a> From<&'a ArgMatches<'a>> for ProxyConfig {
     fn from(matches: &'a ArgMatches<'a>) -> Self {
         let proxy_url = matches.value_of("proxy-url").map(|v| v.to_string());
         let use_proxy = matches.is_present("proxy");

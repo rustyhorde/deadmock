@@ -129,7 +129,8 @@ impl Decoder for Http {
                 Some((ref k, ref v)) => (k, v),
                 None => break,
             };
-            let value = unsafe { HeaderValue::from_shared_unchecked(data.slice(v.0, v.1)) };
+            let value = HeaderValue::from_shared(data.slice(v.0, v.1))
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
             request.header(&data[k.0..k.1], value);
         }
 

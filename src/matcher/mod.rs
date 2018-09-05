@@ -12,9 +12,10 @@ use crate::config::ProxyConfig;
 use crate::error::Result;
 use crate::util;
 use futures::{future, Future, Stream};
+use http::header::{HeaderName, HeaderValue};
 use http::{Request as HttpRequest, Response as HttpResponse, StatusCode};
-use hyper::{Client, Request as HyperRequest};
 use hyper::client::HttpConnector;
+use hyper::{Client, Request as HyperRequest};
 use hyper_proxy::{Intercept, Proxy, ProxyConnector};
 use hyper_tls::HttpsConnector;
 use slog::Logger;
@@ -124,6 +125,23 @@ impl Matcher {
             matches.push(request.uri().path() == url);
         }
 
+        if let Some(headers) = self.request.headers() {
+            let mut found = false;
+            'outer: for header in headers {
+                if let Ok(match_name) = HeaderName::from_bytes(header.key().as_bytes()) {
+                    if let Ok(match_value) = HeaderValue::from_bytes(header.value().as_bytes()) {
+                        for (k, v) in request.headers() {
+                            if match_name == k && match_value == v {
+                                found = true;
+                                break 'outer;
+                            }
+                        }
+                    }
+                }
+            }
+            matches.push(found);
+        }
+
         matches.iter().all(|v| *v)
     }
 
@@ -140,45 +158,57 @@ impl Matcher {
             let (tx, rx) = futures::sync::mpsc::unbounded();
             let headers = self.response.additional_proxy_request_headers().clone();
 
-            tokio::spawn_async(async move {
-                if *proxy_config.use_proxy() {
-                    if let Some(url_str) = proxy_config.proxy_url() {
-                        let proxy_uri = url_str.parse().expect("Unable to parse proxy URI");
-                        let mut proxy = Proxy::new(Intercept::All, proxy_uri);
-                        if let Some(username) = proxy_config.proxy_username() {
-                            if let Some(password) = proxy_config.proxy_password() {
-                                if let Ok(creds) = Credentials::basic(username, password) {
-                                    proxy.set_authorization(creds);
+            tokio::spawn_async(
+                async move {
+                    if *proxy_config.use_proxy() {
+                        if let Some(url_str) = proxy_config.proxy_url() {
+                            let proxy_uri = url_str.parse().expect("Unable to parse proxy URI");
+                            let mut proxy = Proxy::new(Intercept::All, proxy_uri);
+                            if let Some(username) = proxy_config.proxy_username() {
+                                if let Some(password) = proxy_config.proxy_password() {
+                                    if let Ok(creds) = Credentials::basic(username, password) {
+                                        proxy.set_authorization(creds);
+                                    }
                                 }
                             }
-                        }
 
-                        let connector = HttpConnector::new(4);
-                        let proxy_connector = ProxyConnector::from_proxy(connector, proxy).expect("Unable to create proxy connector!");
-                        let client = Client::builder().set_host(true).build::<_, hyper::Body>(proxy_connector);
+                            let connector = HttpConnector::new(4);
+                            let proxy_connector = ProxyConnector::from_proxy(connector, proxy)
+                                .expect("Unable to create proxy connector!");
+                            let client = Client::builder()
+                                .set_host(true)
+                                .build::<_, hyper::Body>(proxy_connector);
+                            await!(run_request(client, tx, full_url, stdout, stderr, headers));
+                        } else {
+                            panic!("Unable to determine proxy url!");
+                        }
+                    } else if full_url.starts_with("https") {
+                        let https_connector =
+                            HttpsConnector::new(4).expect("TLS initialization failed");
+                        let client = Client::builder()
+                            .set_host(true)
+                            .build::<_, hyper::Body>(https_connector);
                         await!(run_request(client, tx, full_url, stdout, stderr, headers));
                     } else {
-                        panic!("Unable to determine proxy url!");
+                        let http_connector = HttpConnector::new(4);
+                        let client = Client::builder()
+                            .set_host(true)
+                            .build::<_, hyper::Body>(http_connector);
+                        await!(run_request(client, tx, full_url, stdout, stderr, headers));
                     }
-                } else if full_url.starts_with("https") {
-                    let https_connector = HttpsConnector::new(4).expect("TLS initialization failed");
-                    let client = Client::builder().set_host(true).build::<_, hyper::Body>(https_connector);
-                    await!(run_request(client, tx, full_url, stdout, stderr, headers));
-                } else {
-                    let http_connector = HttpConnector::new(4);
-                    let client = Client::builder().set_host(true).build::<_, hyper::Body>(http_connector);
-                    await!(run_request(client, tx, full_url, stdout, stderr, headers));
-                }
-            });
+                },
+            );
 
-            Box::new(rx.fold(String::new(), |mut buffer, res| {
-                match res {
-                    Ok(val) => buffer.push_str(&val),
-                    Err(e) => buffer.push_str(&e.to_string()),
-                }
-                futures::future::ok(buffer)
-            }).map_err(|_| "Error processing upstream response".to_string())
-            .map(HttpResponse::new))
+            Box::new(
+                rx.fold(String::new(), |mut buffer, res| {
+                    match res {
+                        Ok(val) => buffer.push_str(&val),
+                        Err(e) => buffer.push_str(&e.to_string()),
+                    }
+                    futures::future::ok(buffer)
+                }).map_err(|_| "Error processing upstream response".to_string())
+                .map(HttpResponse::new),
+            )
         } else {
             let mut response = HttpResponse::builder();
             if let Some(headers) = self.response.headers() {
@@ -208,7 +238,9 @@ impl Matcher {
 
             match response.body(body) {
                 Ok(response) => Box::new(future::ok(response)),
-                Err(e) => util::error_response_fut(format!("{}", e), StatusCode::INTERNAL_SERVER_ERROR),
+                Err(e) => {
+                    util::error_response_fut(format!("{}", e), StatusCode::INTERNAL_SERVER_ERROR)
+                }
             }
         }
     }
@@ -229,8 +261,10 @@ async fn run_request<C>(
     stdout: Option<Logger>,
     stderr: Option<Logger>,
     headers: Option<Vec<Header>>,
-) where C: hyper::client::connect::Connect + Sync + 'static {
-    let response = await!({
+) where
+    C: hyper::client::connect::Connect + Sync + 'static,
+{
+    match await!({
         try_trace!(stdout, "Making request to {}", url);
         let mut request_builder = HyperRequest::get(url);
 
@@ -239,22 +273,38 @@ async fn run_request<C>(
                 request_builder.header(&header.key()[..], &header.value()[..]);
             }
         }
-        let body = request_builder.body(hyper::Body::empty()).expect("Unable to create upstream request");
-        client.request(body).timeout(std::time::Duration::from_secs(10))
-    }).expect("Unable to process upstream response");
+        let body = request_builder
+            .body(hyper::Body::empty())
+            .expect("Unable to create upstream request");
+        client
+            .request(body)
+            .timeout(std::time::Duration::from_secs(10))
+    }) {
+        Ok(response) => {
+            let body = await!({
+                response
+                    .into_body()
+                    .map_err(|_| ())
+                    .fold(Vec::new(), |mut v, chunk| {
+                        v.extend_from_slice(&chunk);
+                        futures::future::ok(v)
+                    })
+            });
 
-    let body = await!({
-        response.into_body().map_err(|_| ()).fold(Vec::new(), |mut v, chunk| {
-            v.extend_from_slice(&chunk);
-            futures::future::ok(v)
-        })
-    });
-
-    if let Ok(body) = body {
-        let body_str = String::from_utf8_lossy(&body).into_owned();
-        tx.unbounded_send(Ok(body_str)).expect("Unable to send upstream response!");
-    } else {
-        try_error!(stderr, "Unable to process upstream response!");
-        tx.unbounded_send(Err("Unable to process upstream response!".to_string())).expect("");
+            if let Ok(body) = body {
+                let body_str = String::from_utf8_lossy(&body).into_owned();
+                tx.unbounded_send(Ok(body_str))
+                    .expect("Unable to send upstream response!");
+            } else {
+                try_error!(stderr, "Unable to process upstream response!");
+                tx.unbounded_send(Err("Unable to process upstream response!".to_string()))
+                    .expect("Unable to send upstream response!");
+            }
+        }
+        Err(e) => {
+            try_error!(stderr, "Unable to process upstream response! {}", e);
+            tx.unbounded_send(Err(format!("Unable to process upstream response! {}", e)))
+                .expect("Unable to send upstream response!");
+        }
     }
 }

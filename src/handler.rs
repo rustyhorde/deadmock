@@ -32,7 +32,12 @@ pub struct Handler {
 }
 
 impl Handler {
-    pub fn new(stream: TcpStream, static_mappings: Mappings, proxy_config: ProxyConfig, files_path: PathBuf) -> Self {
+    pub fn new(
+        stream: TcpStream,
+        static_mappings: Mappings,
+        proxy_config: ProxyConfig,
+        files_path: PathBuf,
+    ) -> Self {
         Self {
             stdout: None,
             stderr: None,
@@ -84,7 +89,11 @@ impl Handler {
                 ).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
             })).then(move |res| {
                 if let Err(e) = res {
-                    try_error!(response_stderr_1, "failed to process connection; error = {}", e);
+                    try_error!(
+                        response_stderr_1,
+                        "failed to process connection; error = {}",
+                        e
+                    );
                 }
 
                 Ok(())
@@ -99,7 +108,6 @@ impl Handler {
 ///
 /// This function is a map from and HTTP request to a future of a response and
 /// represents the various handling a server might do.
-#[cfg_attr(feature = "cargo-clippy", allow(needless_pass_by_value))]
 fn respond(
     request: Request<()>,
     proxy_config: ProxyConfig,

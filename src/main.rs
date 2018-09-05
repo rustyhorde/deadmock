@@ -7,12 +7,24 @@
 // modified, or distributed except according to those terms.
 
 //! `deadmock` 0.1.0
-#![deny(missing_docs)]
+#![deny(
+    clippy::all,
+    clippy::pedantic,
+    missing_docs,
+    missing_debug_implementations,
+    missing_copy_implementations,
+    trivial_casts,
+    trivial_numeric_casts,
+    unsafe_code,
+    unused_import_braces,
+    unused_qualifications
+)]
 #![feature(
     await_macro,
     async_await,
     duration_as_u128,
     futures_api,
+    tool_lints,
     try_from,
     uniform_paths
 )]

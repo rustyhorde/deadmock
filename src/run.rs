@@ -187,10 +187,14 @@ pub fn run() -> Result<i32> {
             .for_each(move |socket| {
                 header::socket_info(&socket, &process_stdout);
 
-                Handler::new(socket, mappings.clone(), proxy_config.clone(), files_path.clone())
-                    .stdout(process_stdout.clone())
-                    .stderr(process_stderr.clone())
-                    .handle();
+                Handler::new(
+                    socket,
+                    mappings.clone(),
+                    proxy_config.clone(),
+                    files_path.clone(),
+                ).stdout(process_stdout.clone())
+                .stderr(process_stderr.clone())
+                .handle();
                 Ok(())
             })
     });
