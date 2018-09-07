@@ -13,7 +13,7 @@ use crate::environment::Env;
 use crate::error::Result;
 use crate::handler::Handler;
 use crate::header;
-use crate::matcher::{Mappings, Matcher};
+use crate::mapping::{Mapping, Mappings};
 use crate::util;
 use slog::{Drain, Level, Logger};
 use slog_async::Async;
@@ -154,9 +154,9 @@ pub fn run() -> Result<i32> {
         let mut reader = BufReader::new(f);
         let mut buffer = Vec::new();
         reader.read_to_end(&mut buffer)?;
-        let mapping: Matcher = toml::from_slice(&buffer)?;
+        let mapping: Mapping = toml::from_slice(&buffer)?;
         trace!(stdout, "{}", mapping);
-        mappings.add(Uuid::new_v4(), mapping);
+        mappings.insert(Uuid::new_v4(), mapping);
         Ok(())
     })?;
 

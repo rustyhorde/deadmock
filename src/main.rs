@@ -54,6 +54,7 @@ mod environment;
 mod error;
 mod handler;
 mod header;
+mod mapping;
 mod matcher;
 mod run;
 mod util;
