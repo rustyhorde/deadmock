@@ -89,8 +89,6 @@ pub fn run() -> Result<i32> {
         ).get_matches();
 
     // Setup the environment.
-    let dm_env = Env::get_env_var();
-    let mut buffer = String::new();
     let env_path = if let Some(env_path) = matches.value_of("env_path") {
         PathBuf::from(env_path)
     } else if let Some(config_path) = dirs::config_dir() {
@@ -99,6 +97,8 @@ pub fn run() -> Result<i32> {
         PathBuf::from("env.toml")
     };
 
+    let dm_env = Env::get_env_var();
+    let mut buffer = String::new();
     let envs: Environments<Environment, Env> =
         Environments::from_path(env_path.as_path(), &mut buffer)?;
     let current = envs.current()?;
