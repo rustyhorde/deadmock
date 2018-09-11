@@ -61,7 +61,7 @@ pub fn header() {
     println!();
 }
 
-#[cfg_attr(feature = "cargo-clippy", allow(cast_precision_loss))]
+#[allow(clippy::cast_precision_loss)]
 fn as_mebibytes(val: usize) -> f64 {
     (val as f64) / 1_048_576.
 }

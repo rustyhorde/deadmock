@@ -16,6 +16,7 @@ use std::fs::{self, DirEntry};
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::path::Path;
 
+#[allow(dead_code)]
 pub fn write_opt<T: fmt::Display + fmt::Debug>(
     f: &mut fmt::Formatter,
     key: &str,

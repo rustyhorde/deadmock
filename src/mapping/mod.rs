@@ -31,13 +31,13 @@ pub struct Mapping {
 }
 
 impl Ord for Mapping {
-    fn cmp(&self, other: &Mapping) -> Ordering {
+    fn cmp(&self, other: &Self) -> Ordering {
         self.priority.cmp(&other.priority)
     }
 }
 
 impl PartialOrd for Mapping {
-    fn partial_cmp(&self, other: &Mapping) -> Option<Ordering> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }

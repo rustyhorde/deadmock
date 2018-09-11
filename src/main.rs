@@ -7,6 +7,7 @@
 // modified, or distributed except according to those terms.
 
 //! `deadmock` 0.1.0
+#![feature(crate_visibility_modifier)]
 #![deny(
     clippy::all,
     clippy::pedantic,
@@ -49,8 +50,6 @@ extern crate tokio;
 extern crate http as http_types;
 
 mod codec;
-mod config;
-mod environment;
 mod error;
 mod handler;
 mod header;

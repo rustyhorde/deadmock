@@ -9,7 +9,6 @@
 //! `deadmock` request/response handler.
 use cached::UnboundCache;
 use crate::codec::inbound::Http;
-use crate::config::ProxyConfig;
 use crate::error::Result;
 use crate::http_types::{Request as HttpRequest, Response as HttpResponse, StatusCode};
 use crate::mapping::{Header, Mappings, Response};
@@ -20,6 +19,7 @@ use hyper::client::HttpConnector;
 use hyper::{Client, Request as HyperRequest};
 use hyper_proxy::{Intercept, Proxy, ProxyConnector};
 use hyper_tls::HttpsConnector;
+use libdeadmock::ProxyConfig;
 use slog::Logger;
 use std::fs::File;
 use std::io::{self, BufReader, Read};
@@ -89,13 +89,13 @@ impl Handler {
         let task = tx
             .send_all(rx.and_then(move |req| {
                 respond(
-                    req,
+                    &req,
                     proxy_config.clone(),
                     files_path.clone(),
                     response_stdout.clone(),
                     response_stderr.clone(),
-                    static_mappings.clone(),
-                    dynamic_mappings.clone(),
+                    &static_mappings,
+                    &dynamic_mappings,
                 ).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
             })).then(move |res| {
                 if let Err(e) = res {
@@ -119,13 +119,13 @@ impl Handler {
 /// This function is a map from and HTTP request to a future of a response and
 /// represents the various handling a server might do.
 fn respond(
-    request: HttpRequest<()>,
+    request: &HttpRequest<()>,
     proxy_config: ProxyConfig,
     files_path: PathBuf,
     stdout: Option<Logger>,
     stderr: Option<Logger>,
-    static_mappings: Mappings,
-    dynamic_mappings: Arc<Mutex<Mappings>>,
+    static_mappings: &Mappings,
+    dynamic_mappings: &Arc<Mutex<Mappings>>,
 ) -> Box<Future<Item = HttpResponse<String>, Error = String> + Send> {
     let matcher = Matcher {};
     if let Ok(mapping) = matcher.get_match(&request, &static_mappings) {

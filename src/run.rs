@@ -7,17 +7,17 @@
 // modified, or distributed except according to those terms.
 
 //! `deadmock` runtime
-use clap::{App, Arg};
-use crate::config::ProxyConfig;
-use crate::environment::Env;
+use clap::{App, Arg, ArgMatches};
 use crate::error::Result;
 use crate::handler::Handler;
 use crate::header;
 use crate::mapping::{Mapping, Mappings};
 use crate::util;
+use libdeadmock::{ProxyConfig, RuntimeConfig};
 use slog::{Drain, Level, Logger};
 use slog_async::Async;
 use slog_term::{CompactFormat, TermDecorator};
+use std::convert::TryFrom;
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::net::SocketAddr;
@@ -31,7 +31,7 @@ use uuid::Uuid;
 pub fn run() -> Result<i32> {
     header::header();
 
-    let matches = App::new(env!("CARGO_PKG_NAME"))
+    let matches: ArgMatches = App::new(env!("CARGO_PKG_NAME"))
         .version(env!("VERGEN_SEMVER"))
         .author(env!("CARGO_PKG_AUTHORS"))
         .about("Proxy server for hosting mocked responses on match criteria")
@@ -89,22 +89,15 @@ pub fn run() -> Result<i32> {
         ).get_matches();
 
     // Setup the environment.
-    let env_path = if let Some(env_path) = matches.value_of("env_path") {
-        PathBuf::from(env_path)
-    } else if let Some(config_path) = dirs::config_dir() {
-        config_path.join("deadmock").join("env.toml")
-    } else {
-        PathBuf::from("env.toml")
-    };
-
-    let dm_env = Env::get_env_var();
-    let mut buffer = String::new();
-    let envs: Environments<Environment, Env> =
-        Environments::from_path(env_path.as_path(), &mut buffer)?;
+    let dm_env = RuntimeConfig::env();
+    let envs: Environments<Environment, RuntimeConfig> = Environments::try_from(&matches)?;
     let current = envs.current()?;
 
     // Setup the proxy config.
-    let proxy_config = ProxyConfig::from(&matches.clone());
+    let proxy_config = match ProxyConfig::try_from(&matches) {
+        Ok(pc) => pc,
+        Err(e) => return Err(e.as_fail().to_string().into()),
+    };
 
     // Setup the logging.
     let level = match matches.occurrences_of("v") {
@@ -170,14 +163,18 @@ pub fn run() -> Result<i32> {
     };
 
     // Setup the listener.
-    let ip = current.ip().unwrap_or("127.0.0.1");
+    let ip = if let Some(ip) = current.ip() {
+        ip.clone()
+    } else {
+        "127.0.0.1".to_string()
+    };
     let port = current.port().unwrap_or(32276);
     let addr = format!("{}:{}", ip, port);
     let socket_addr = addr.parse::<SocketAddr>()?;
     let listener = TcpListener::bind(&socket_addr)?;
 
     // Run the server.
-    trace!(stdout, "{}", current);
+    trace!(stdout, "{:?}", current);
     info!(stdout, "Listening on '{}'", socket_addr);
 
     tokio::run({
