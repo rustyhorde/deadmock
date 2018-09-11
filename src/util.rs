@@ -7,9 +7,9 @@
 // modified, or distributed except according to those terms.
 
 //! `deadmock` utils.
-use crate::error::Result;
 use crate::http_types::header::{HeaderValue, CONTENT_TYPE};
 use crate::http_types::{Response, StatusCode};
+use failure::Error;
 use futures::{future, Future};
 use std::fmt;
 use std::fs::{self, DirEntry};
@@ -28,9 +28,9 @@ pub fn write_opt<T: fmt::Display + fmt::Debug>(
     Ok(())
 }
 
-pub fn visit_dirs<F>(dir: &Path, cb: &mut F) -> Result<()>
+pub fn visit_dirs<F>(dir: &Path, cb: &mut F) -> Result<(), Error>
 where
-    F: FnMut(&DirEntry) -> Result<()>,
+    F: FnMut(&DirEntry) -> Result<(), Error>,
 {
     if fs::metadata(dir)?.is_dir() {
         for entry in fs::read_dir(dir)? {
@@ -43,23 +43,6 @@ where
         }
     }
     Ok(())
-}
-
-#[allow(dead_code)]
-pub fn response(body: String, status_code: StatusCode) -> Response<String> {
-    let mut response = Response::builder();
-    response
-        .header(CONTENT_TYPE, HeaderValue::from_static("application/json"))
-        .status(status_code);
-
-    if let Ok(response) = response.body(body) {
-        response
-    } else {
-        error_response(
-            "Unable to process body".to_string(),
-            StatusCode::INTERNAL_SERVER_ERROR,
-        )
-    }
 }
 
 pub fn error_response_fut(
@@ -90,7 +73,7 @@ pub fn error_response(message: String, status_code: StatusCode) -> Response<Stri
 }
 
 #[allow(dead_code)]
-pub fn resolve(protocol: &str, host: &str) -> Result<Vec<SocketAddr>> {
+pub fn resolve(protocol: &str, host: &str) -> Result<Vec<SocketAddr>, Error> {
     let port = match protocol {
         "http" => 80,
         "https" => 443,

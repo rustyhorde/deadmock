@@ -7,26 +7,33 @@
 // modified, or distributed except according to those terms.
 
 //! `deadmock` configuration
-
-use crate::error::Result;
-use crate::mapping::{Mapping, Mappings, Request};
+use failure::Error;
 use http::header::{HeaderName, HeaderValue};
 use http::Request as HttpRequest;
+use libdeadmock::{MappingConfig, MappingsConfig, RequestConfig};
 
 #[derive(Debug)]
 pub struct Matcher {}
 
 impl Matcher {
-    pub fn get_match(&self, request: &HttpRequest<()>, mappings: &Mappings) -> Result<Mapping> {
+    pub fn get_match(
+        &self,
+        request: &HttpRequest<()>,
+        mappings: &MappingsConfig,
+    ) -> Result<MappingConfig, Error> {
         mappings
-            .mappings()
+            .inner()
             .iter()
             .filter_map(|(_uuid, mapping)| self.is_match(request, mapping))
             .max()
-            .ok_or_else(|| "No mapping found".into())
+            .ok_or_else(|| format_err!("No mapping found"))
     }
 
-    fn is_match(&self, request: &HttpRequest<()>, mapping: &Mapping) -> Option<Mapping> {
+    fn is_match(
+        &self,
+        request: &HttpRequest<()>,
+        mapping: &MappingConfig,
+    ) -> Option<MappingConfig> {
         let mut matches: Vec<bool> = Vec::new();
         let request_config = mapping.request();
 
@@ -45,7 +52,7 @@ impl Matcher {
         &self,
         matches: &mut Vec<bool>,
         request: &HttpRequest<()>,
-        request_config: &Request,
+        request_config: &RequestConfig,
     ) {
         if let Some(method) = request_config.method() {
             matches.push(request.method().as_str() == &method[..]);
@@ -56,7 +63,7 @@ impl Matcher {
         &self,
         matches: &mut Vec<bool>,
         request: &HttpRequest<()>,
-        request_config: &Request,
+        request_config: &RequestConfig,
     ) {
         if let Some(url) = request_config.url() {
             matches.push(request.uri().path() == url);
@@ -67,7 +74,7 @@ impl Matcher {
         &self,
         matches: &mut Vec<bool>,
         request: &HttpRequest<()>,
-        request_config: &Request,
+        request_config: &RequestConfig,
     ) {
         if let Some(headers) = request_config.headers() {
             let mut found = false;

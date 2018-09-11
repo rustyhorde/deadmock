@@ -9,17 +9,16 @@
 //! `deadmock` request/response handler.
 use cached::UnboundCache;
 use crate::codec::inbound::Http;
-use crate::error::Result;
 use crate::http_types::{Request as HttpRequest, Response as HttpResponse, StatusCode};
-use crate::mapping::{Header, Mappings, Response};
 use crate::matcher::Matcher;
 use crate::util;
+use failure::Error;
 use futures::{future, Future, Sink, Stream};
 use hyper::client::HttpConnector;
 use hyper::{Client, Request as HyperRequest};
 use hyper_proxy::{Intercept, Proxy, ProxyConnector};
 use hyper_tls::HttpsConnector;
-use libdeadmock::ProxyConfig;
+use libdeadmock::{HeaderConfig, MappingsConfig, ProxyConfig, ResponseConfig};
 use slog::Logger;
 use std::fs::File;
 use std::io::{self, BufReader, Read};
@@ -37,14 +36,14 @@ pub struct Handler {
     proxy_config: ProxyConfig,
     files_path: PathBuf,
     stream: TcpStream,
-    static_mappings: Mappings,
-    dynamic_mappings: Arc<Mutex<Mappings>>,
+    static_mappings: MappingsConfig,
+    dynamic_mappings: Arc<Mutex<MappingsConfig>>,
 }
 
 impl Handler {
     pub fn new(
         stream: TcpStream,
-        static_mappings: Mappings,
+        static_mappings: MappingsConfig,
         proxy_config: ProxyConfig,
         files_path: PathBuf,
     ) -> Self {
@@ -55,7 +54,7 @@ impl Handler {
             files_path,
             stream,
             static_mappings,
-            dynamic_mappings: Arc::new(Mutex::new(Mappings::new())),
+            dynamic_mappings: Arc::new(Mutex::new(MappingsConfig::default())),
         }
     }
 
@@ -124,8 +123,8 @@ fn respond(
     files_path: PathBuf,
     stdout: Option<Logger>,
     stderr: Option<Logger>,
-    static_mappings: &Mappings,
-    dynamic_mappings: &Arc<Mutex<Mappings>>,
+    static_mappings: &MappingsConfig,
+    dynamic_mappings: &Arc<Mutex<MappingsConfig>>,
 ) -> Box<Future<Item = HttpResponse<String>, Error = String> + Send> {
     let matcher = Matcher {};
     if let Ok(mapping) = matcher.get_match(&request, &static_mappings) {
@@ -163,7 +162,7 @@ fn respond(
 
 fn http_response(
     request: &HttpRequest<()>,
-    response_config: &Response,
+    response_config: &ResponseConfig,
     stdout: Option<Logger>,
     stderr: Option<Logger>,
     proxy_config: ProxyConfig,
@@ -261,11 +260,11 @@ fn http_response(
 
 async fn run_request<C>(
     client: Client<C, hyper::Body>,
-    tx: futures::sync::mpsc::UnboundedSender<std::result::Result<String, String>>,
+    tx: futures::sync::mpsc::UnboundedSender<Result<String, String>>,
     url: String,
     stdout: Option<Logger>,
     stderr: Option<Logger>,
-    headers: Option<Vec<Header>>,
+    headers: Option<Vec<HeaderConfig>>,
 ) where
     C: hyper::client::connect::Connect + Sync + 'static,
 {
@@ -317,11 +316,11 @@ async fn run_request<C>(
 cached_key_result!{
     STATIC_RESPONSE: UnboundCache<String, String> = UnboundCache::new();
     Key = { filename.to_string() };
-    fn load(files_path: PathBuf, filename: &str) -> ::std::result::Result<String, &str> = {
+    fn load(files_path: PathBuf, filename: &str) -> Result<String, &str> = {
         let mut buffer = String::new();
         let mut found = false;
 
-        util::visit_dirs(&files_path, &mut |entry| -> Result<()> {
+        util::visit_dirs(&files_path, &mut |entry| -> Result<(), Error> {
             if let Some(fname) = entry.path().file_name() {
                 if fname.to_string_lossy() == filename {
                     let f = File::open(entry.path())?;

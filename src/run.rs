@@ -7,31 +7,35 @@
 // modified, or distributed except according to those terms.
 
 //! `deadmock` runtime
-use clap::{App, Arg, ArgMatches};
-use crate::error::Result;
+use clap::{App, Arg};
 use crate::handler::Handler;
 use crate::header;
-use crate::mapping::{Mapping, Mappings};
-use crate::util;
-use libdeadmock::{ProxyConfig, RuntimeConfig};
+use failure::Error;
+use libdeadmock::{MappingsConfig, ProxyConfig, RuntimeConfig};
 use slog::{Drain, Level, Logger};
 use slog_async::Async;
 use slog_term::{CompactFormat, TermDecorator};
 use std::convert::TryFrom;
-use std::fs::File;
-use std::io::{BufReader, Read};
+use std::env;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use tokio::net::TcpListener;
 use tokio::prelude::Stream;
 use tomlenv::{Environment, Environments};
-use uuid::Uuid;
 
 /// CLI Runtime
-pub fn run() -> Result<i32> {
+pub fn run() -> Result<i32, Error> {
     header::header();
+    let default_config_path = if let Some(config_dir) = dirs::config_dir() {
+        let prog_config_dir = config_dir.join(env!("CARGO_PKG_NAME"));
+        format!("{}", prog_config_dir.display())
+    } else if let Ok(current_dir) = env::current_dir() {
+        format!("{}", current_dir.display())
+    } else {
+        ".".to_string()
+    };
 
-    let matches: ArgMatches = App::new(env!("CARGO_PKG_NAME"))
+    let matches = App::new(env!("CARGO_PKG_NAME"))
         .version(env!("VERGEN_SEMVER"))
         .author(env!("CARGO_PKG_AUTHORS"))
         .about("Proxy server for hosting mocked responses on match criteria")
@@ -47,7 +51,8 @@ pub fn run() -> Result<i32> {
                 .long("env_path")
                 .takes_value(true)
                 .value_name("ENV_PATH")
-                .help("Specify the full path to the 'env' directory"),
+                .default_value(&default_config_path[..])
+                .help("Specify the full path to the directory where 'env.toml' lives"),
         ).arg(
             Arg::with_name("files_path")
                 .short("f")
@@ -61,6 +66,7 @@ pub fn run() -> Result<i32> {
                 .long("mappings_path")
                 .takes_value(true)
                 .value_name("MAPPINGS_PATH")
+                .default_value(&default_config_path[..])
                 .help("Specify the full path to the 'mappings' directory"),
         ).arg(
             Arg::with_name("proxy")
@@ -94,10 +100,10 @@ pub fn run() -> Result<i32> {
     let current = envs.current()?;
 
     // Setup the proxy config.
-    let proxy_config = match ProxyConfig::try_from(&matches) {
-        Ok(pc) => pc,
-        Err(e) => return Err(e.as_fail().to_string().into()),
-    };
+    let proxy_config = ProxyConfig::try_from(&matches)?;
+
+    // Load up the static mappings.
+    let mappings = MappingsConfig::try_from(&matches)?;
 
     // Setup the logging.
     let level = match matches.occurrences_of("v") {
@@ -130,28 +136,6 @@ pub fn run() -> Result<i32> {
     let map_err_stderr = stderr.clone();
     let process_stderr = stderr.clone();
     let process_stdout = stdout.clone();
-
-    // Load up the static mappings.
-    let mut mappings = Mappings::new();
-    let mappings_path = if let Some(mappings_path) = matches.value_of("mappings_path") {
-        PathBuf::from(mappings_path)
-    } else if let Some(config_path) = dirs::config_dir() {
-        config_path.join("deadmock").join("mappings")
-    } else {
-        PathBuf::from("mappings")
-    };
-
-    util::visit_dirs(&mappings_path, &mut |entry| -> Result<()> {
-        trace!(stdout, "Loading Mapping: {}", entry.path().display());
-        let f = File::open(entry.path())?;
-        let mut reader = BufReader::new(f);
-        let mut buffer = Vec::new();
-        reader.read_to_end(&mut buffer)?;
-        let mapping: Mapping = toml::from_slice(&buffer)?;
-        trace!(stdout, "{}", mapping);
-        mappings.insert(Uuid::new_v4(), mapping);
-        Ok(())
-    })?;
 
     // Setup the files_path.
     let files_path = if let Some(files_path) = matches.value_of("files_path") {

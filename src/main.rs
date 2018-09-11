@@ -33,9 +33,7 @@
 #[macro_use]
 extern crate cached;
 #[macro_use]
-extern crate error_chain;
-#[macro_use]
-extern crate getset;
+extern crate failure;
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
@@ -50,10 +48,8 @@ extern crate tokio;
 extern crate http as http_types;
 
 mod codec;
-mod error;
 mod handler;
 mod header;
-mod mapping;
 mod matcher;
 mod run;
 mod util;
