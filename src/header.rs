@@ -10,6 +10,8 @@
 use colored::{Color, Colorize};
 use rand::Rng;
 use slog::Logger;
+use slog::{b, kv, log, record, record_static, trace};
+use slog_try::try_trace;
 use std::convert::TryFrom;
 use tokio::net::TcpStream;
 
@@ -66,7 +68,7 @@ fn as_mebibytes(val: usize) -> f64 {
     (val as f64) / 1_048_576.
 }
 
-pub fn socket_info(socket: &TcpStream, stdout: &Logger) {
+pub fn socket_info(socket: &TcpStream, stdout: &Option<Logger>) {
     let local_addr = socket
         .local_addr()
         .ok()
@@ -88,7 +90,7 @@ pub fn socket_info(socket: &TcpStream, stdout: &Logger) {
             .map_or(0, |v| v.as_millis()),
     ).unwrap_or(0);
 
-    trace!(
+    try_trace!(
         stdout,
         "Accepting connection";
         "SO_SNDBUF" => format!("{:.3} MiB", send_size),

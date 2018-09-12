@@ -7,7 +7,7 @@
 // modified, or distributed except according to those terms.
 
 //! `deadmock` request/response handler.
-use cached::UnboundCache;
+use cached::{cached_key_result, UnboundCache};
 use crate::codec::inbound::Http;
 use crate::http_types::{Request as HttpRequest, Response as HttpResponse, StatusCode};
 use crate::matcher::Matcher;
@@ -18,12 +18,15 @@ use hyper::client::HttpConnector;
 use hyper::{Client, Request as HyperRequest};
 use hyper_proxy::{Intercept, Proxy, ProxyConnector};
 use hyper_tls::HttpsConnector;
+use lazy_static::lazy_static;
 use libdeadmock::{HeaderConfig, MappingsConfig, ProxyConfig, ResponseConfig};
-use slog::Logger;
+use slog::{b, error, kv, log, record, record_static, trace, Logger};
+use slog_try::{try_error, try_trace};
 use std::fs::File;
 use std::io::{self, BufReader, Read};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use tokio::await;
 use tokio::net::TcpStream;
 use tokio::prelude::FutureExt;
 use tokio_codec::Decoder;
@@ -58,13 +61,13 @@ impl Handler {
         }
     }
 
-    pub fn stdout(mut self, stdout: Logger) -> Self {
-        self.stdout = Some(stdout);
+    pub fn stdout(mut self, stdout: Option<Logger>) -> Self {
+        self.stdout = stdout;
         self
     }
 
-    pub fn stderr(mut self, stderr: Logger) -> Self {
-        self.stderr = Some(stderr);
+    pub fn stderr(mut self, stderr: Option<Logger>) -> Self {
+        self.stderr = stderr;
         self
     }
 
@@ -125,7 +128,7 @@ fn respond(
     stderr: Option<Logger>,
     static_mappings: &MappingsConfig,
     dynamic_mappings: &Arc<Mutex<MappingsConfig>>,
-) -> Box<Future<Item = HttpResponse<String>, Error = String> + Send> {
+) -> Box<dyn Future<Item = HttpResponse<String>, Error = String> + Send> {
     let matcher = Matcher {};
     if let Ok(mapping) = matcher.get_match(&request, &static_mappings) {
         try_trace!(stdout, "{}", mapping);
@@ -167,7 +170,7 @@ fn http_response(
     stderr: Option<Logger>,
     proxy_config: ProxyConfig,
     files_path: PathBuf,
-) -> Box<Future<Item = HttpResponse<String>, Error = String> + Send> {
+) -> Box<dyn Future<Item = HttpResponse<String>, Error = String> + Send> {
     if let Some(proxy_base_url) = response_config.proxy_base_url() {
         let full_url = format!("{}{}", proxy_base_url, request.uri());
         let (tx, rx) = futures::sync::mpsc::unbounded();

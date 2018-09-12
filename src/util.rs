@@ -11,6 +11,7 @@ use crate::http_types::header::{HeaderValue, CONTENT_TYPE};
 use crate::http_types::{Response, StatusCode};
 use failure::Error;
 use futures::{future, Future};
+use serde_derive::Serialize;
 use std::fmt;
 use std::fs::{self, DirEntry};
 use std::net::{SocketAddr, ToSocketAddrs};
@@ -18,7 +19,7 @@ use std::path::Path;
 
 #[allow(dead_code)]
 pub fn write_opt<T: fmt::Display + fmt::Debug>(
-    f: &mut fmt::Formatter,
+    f: &mut fmt::Formatter<'_>,
     key: &str,
     opt: &Option<T>,
 ) -> fmt::Result {
@@ -48,7 +49,7 @@ where
 pub fn error_response_fut(
     body: String,
     status_code: StatusCode,
-) -> Box<Future<Item = Response<String>, Error = String> + Send> {
+) -> Box<dyn Future<Item = Response<String>, Error = String> + Send> {
     Box::new(future::ok(error_response(body, status_code)))
 }
 

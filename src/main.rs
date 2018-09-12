@@ -7,45 +7,48 @@
 // modified, or distributed except according to those terms.
 
 //! `deadmock` 0.1.0
-#![feature(crate_visibility_modifier)]
-#![deny(
-    clippy::all,
-    clippy::pedantic,
-    missing_docs,
-    missing_debug_implementations,
-    missing_copy_implementations,
-    trivial_casts,
-    trivial_numeric_casts,
-    unsafe_code,
-    unused_import_braces,
-    unused_qualifications
-)]
 #![feature(
     await_macro,
     async_await,
+    crate_visibility_modifier,
     duration_as_u128,
     futures_api,
     tool_lints,
     try_from,
     uniform_paths
 )]
-
-#[macro_use]
-extern crate cached;
-#[macro_use]
-extern crate failure;
-#[macro_use]
-extern crate lazy_static;
-#[macro_use]
-extern crate serde_derive;
-#[macro_use]
-extern crate slog;
-#[macro_use]
-extern crate slog_try;
-#[macro_use]
-extern crate tokio;
-
-extern crate http as http_types;
+#![deny(
+    clippy::all,
+    clippy::pedantic,
+    macro_use_extern_crate,
+    missing_copy_implementations,
+    missing_debug_implementations,
+    missing_docs,
+    trivial_casts,
+    trivial_numeric_casts,
+    unused
+)]
+#![warn(
+    absolute_paths_not_starting_with_crate,
+    anonymous_parameters,
+    bare_trait_objects,
+    box_pointers,
+    elided_lifetimes_in_paths,
+    ellipsis_inclusive_range_patterns,
+    keyword_idents,
+    question_mark_macro_sep,
+    single_use_lifetimes,
+    unreachable_pub,
+    unsafe_code,
+    unused_extern_crates,
+    unused_import_braces,
+    unused_labels,
+    unused_lifetimes,
+    unused_qualifications,
+    unused_results,
+    variant_size_differences
+)]
+#![allow()]
 
 mod codec;
 mod handler;
@@ -54,6 +57,7 @@ mod matcher;
 mod run;
 mod util;
 
+use http as http_types;
 use std::io::{self, Write};
 use std::process;
 

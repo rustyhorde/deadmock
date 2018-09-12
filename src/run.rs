@@ -11,10 +11,9 @@ use clap::{App, Arg};
 use crate::handler::Handler;
 use crate::header;
 use failure::Error;
-use libdeadmock::{MappingsConfig, ProxyConfig, RuntimeConfig};
-use slog::{Drain, Level, Logger};
-use slog_async::Async;
-use slog_term::{CompactFormat, TermDecorator};
+use libdeadmock::{Loggers, MappingsConfig, ProxyConfig, RuntimeConfig};
+use slog::{b, error, info, kv, log, record, record_static, trace};
+use slog_try::{try_error, try_info, try_trace};
 use std::convert::TryFrom;
 use std::env;
 use std::net::SocketAddr;
@@ -24,7 +23,7 @@ use tokio::prelude::Stream;
 use tomlenv::{Environment, Environments};
 
 /// CLI Runtime
-pub fn run() -> Result<i32, Error> {
+crate fn run() -> Result<i32, Error> {
     header::header();
     let default_config_path = if let Some(config_dir) = dirs::config_dir() {
         let prog_config_dir = config_dir.join(env!("CARGO_PKG_NAME"));
@@ -95,7 +94,6 @@ pub fn run() -> Result<i32, Error> {
         ).get_matches();
 
     // Setup the environment.
-    let dm_env = RuntimeConfig::env();
     let envs: Environments<Environment, RuntimeConfig> = Environments::try_from(&matches)?;
     let current = envs.current()?;
 
@@ -106,31 +104,8 @@ pub fn run() -> Result<i32, Error> {
     let mappings = MappingsConfig::try_from(&matches)?;
 
     // Setup the logging.
-    let level = match matches.occurrences_of("v") {
-        0 => Level::Warning,
-        1 => Level::Info,
-        2 => Level::Debug,
-        3 | _ => Level::Trace,
-    };
-
-    let stdout_decorator = TermDecorator::new().stdout().build();
-    let stdout_drain = CompactFormat::new(stdout_decorator).build().fuse();
-    let stdout_async_drain = Async::new(stdout_drain).build().filter_level(level).fuse();
-    let stdout = Logger::root(
-        stdout_async_drain,
-        o!(env!("CARGO_PKG_NAME") => env!("VERGEN_SEMVER"), "env" => dm_env.clone()),
-    );
-
-    let stderr_decorator = TermDecorator::new().stdout().build();
-    let stderr_drain = CompactFormat::new(stderr_decorator).build().fuse();
-    let stderr_async_drain = Async::new(stderr_drain)
-        .build()
-        .filter_level(Level::Error)
-        .fuse();
-    let stderr = Logger::root(
-        stderr_async_drain,
-        o!(env!("CARGO_PKG_NAME") => env!("VERGEN_SEMVER"), "env" => dm_env.clone()),
-    );
+    let loggers = Loggers::try_from(&matches)?;
+    let (stdout, stderr) = loggers.split();
 
     // Setup logging clones to move into handlers.
     let map_err_stderr = stderr.clone();
@@ -158,13 +133,13 @@ pub fn run() -> Result<i32, Error> {
     let listener = TcpListener::bind(&socket_addr)?;
 
     // Run the server.
-    trace!(stdout, "{:?}", current);
-    info!(stdout, "Listening on '{}'", socket_addr);
+    try_trace!(stdout, "{:?}", current);
+    try_info!(stdout, "Listening on '{}'", socket_addr);
 
     tokio::run({
         listener
             .incoming()
-            .map_err(move |e| error!(map_err_stderr, "Failed to accept socket: {}", e))
+            .map_err(move |e| try_error!(map_err_stderr, "Failed to accept socket: {}", e))
             .for_each(move |socket| {
                 header::socket_info(&socket, &process_stdout);
 

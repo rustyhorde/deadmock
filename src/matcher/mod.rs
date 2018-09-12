@@ -7,7 +7,7 @@
 // modified, or distributed except according to those terms.
 
 //! `deadmock` configuration
-use failure::Error;
+use failure::{format_err, Error};
 use http::header::{HeaderName, HeaderValue};
 use http::Request as HttpRequest;
 use libdeadmock::{MappingConfig, MappingsConfig, RequestConfig};
