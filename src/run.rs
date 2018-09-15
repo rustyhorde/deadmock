@@ -8,23 +8,18 @@
 
 //! `deadmock` runtime
 use clap::{App, Arg};
-use crate::handler::Handler;
-use crate::header;
 use failure::Error;
-use libdeadmock::{Loggers, MappingsConfig, ProxyConfig, RuntimeConfig};
-use slog::{b, error, info, kv, log, record, record_static, trace};
-use slog_try::{try_error, try_info, try_trace};
+use libdeadmock::{config, logging, server};
 use std::convert::TryFrom;
 use std::env;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use tokio::net::TcpListener;
-use tokio::prelude::Stream;
 use tomlenv::{Environment, Environments};
 
 /// CLI Runtime
 crate fn run() -> Result<i32, Error> {
-    header::header();
+    server::header();
+
     let default_config_path = if let Some(config_dir) = dirs::config_dir() {
         let prog_config_dir = config_dir.join(env!("CARGO_PKG_NAME"));
         format!("{}", prog_config_dir.display())
@@ -53,20 +48,20 @@ crate fn run() -> Result<i32, Error> {
                 .default_value(&default_config_path[..])
                 .help("Specify the full path to the directory where 'env.toml' lives"),
         ).arg(
-            Arg::with_name("files_path")
-                .short("f")
-                .long("files_path")
-                .takes_value(true)
-                .value_name("FILES_PATH")
-                .help("Specify the full path to the 'files' directory"),
-        ).arg(
             Arg::with_name("mappings_path")
                 .short("m")
                 .long("mappings_path")
                 .takes_value(true)
                 .value_name("MAPPINGS_PATH")
                 .default_value(&default_config_path[..])
-                .help("Specify the full path to the 'mappings' directory"),
+                .help("Specify the full path to the parent directory of your mappings"),
+        ).arg(
+            Arg::with_name("files_path")
+                .short("f")
+                .long("files_path")
+                .takes_value(true)
+                .value_name("FILES_PATH")
+                .help("Specify the full path to the 'files' directory"),
         ).arg(
             Arg::with_name("proxy")
                 .short("p")
@@ -94,21 +89,20 @@ crate fn run() -> Result<i32, Error> {
         ).get_matches();
 
     // Setup the environment.
-    let envs: Environments<Environment, RuntimeConfig> = Environments::try_from(&matches)?;
+    let envs: Environments<Environment, config::Runtime> = Environments::try_from(&matches)?;
     let current = envs.current()?;
 
     // Setup the proxy config.
-    let proxy_config = ProxyConfig::try_from(&matches)?;
+    let proxy_config = config::Proxy::try_from(&matches)?;
 
     // Load up the static mappings.
-    let mappings = MappingsConfig::try_from(&matches)?;
+    let mappings = config::Mappings::try_from(&matches)?;
 
     // Setup the logging.
-    let loggers = Loggers::try_from(&matches)?;
+    let loggers = logging::Loggers::try_from(&matches)?;
     let (stdout, stderr) = loggers.split();
 
     // Setup logging clones to move into handlers.
-    let map_err_stderr = stderr.clone();
     let process_stderr = stderr.clone();
     let process_stdout = stdout.clone();
 
@@ -130,30 +124,13 @@ crate fn run() -> Result<i32, Error> {
     let port = current.port().unwrap_or(32276);
     let addr = format!("{}:{}", ip, port);
     let socket_addr = addr.parse::<SocketAddr>()?;
-    let listener = TcpListener::bind(&socket_addr)?;
+
+    let handler = server::Handler::new(mappings.clone(), proxy_config.clone(), files_path.clone())
+        .stdout(process_stdout.clone())
+        .stderr(process_stderr.clone());
 
     // Run the server.
-    try_trace!(stdout, "{:?}", current);
-    try_info!(stdout, "Listening on '{}'", socket_addr);
-
-    tokio::run({
-        listener
-            .incoming()
-            .map_err(move |e| try_error!(map_err_stderr, "Failed to accept socket: {}", e))
-            .for_each(move |socket| {
-                header::socket_info(&socket, &process_stdout);
-
-                Handler::new(
-                    socket,
-                    mappings.clone(),
-                    proxy_config.clone(),
-                    files_path.clone(),
-                ).stdout(process_stdout.clone())
-                .stderr(process_stderr.clone())
-                .handle();
-                Ok(())
-            })
-    });
+    let _ = server::run(&socket_addr, handler);
 
     Ok(0)
 }

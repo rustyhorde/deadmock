@@ -7,16 +7,7 @@
 // modified, or distributed except according to those terms.
 
 //! `deadmock` 0.1.0
-#![feature(
-    await_macro,
-    async_await,
-    crate_visibility_modifier,
-    duration_as_u128,
-    futures_api,
-    tool_lints,
-    try_from,
-    uniform_paths
-)]
+#![feature(crate_visibility_modifier, tool_lints, try_from)]
 #![deny(
     clippy::all,
     clippy::pedantic,
@@ -50,14 +41,9 @@
 )]
 #![allow()]
 
-mod codec;
-mod handler;
-mod header;
-mod matcher;
 mod run;
 mod util;
 
-use http as http_types;
 use std::io::{self, Write};
 use std::process;
 
