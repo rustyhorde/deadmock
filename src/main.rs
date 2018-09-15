@@ -39,7 +39,7 @@
     unused_results,
     variant_size_differences
 )]
-#![allow()]
+#![allow(clippy::stutter)]
 
 mod run;
 mod util;

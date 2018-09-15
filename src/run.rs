@@ -110,7 +110,7 @@ crate fn run() -> Result<i32, Error> {
     let files_path = if let Some(files_path) = matches.value_of("files_path") {
         PathBuf::from(files_path)
     } else if let Some(config_path) = dirs::config_dir() {
-        config_path.join("deadmock").join("files")
+        config_path.join(env!("CARGO_PKG_NAME")).join("files")
     } else {
         PathBuf::from("files")
     };
