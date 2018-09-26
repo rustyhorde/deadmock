@@ -32,5 +32,4 @@ features = ["max_level_trace", "release_max_level_trace"]
 vergen = "2"
 
 [patch.crates-io]
-hyper-proxy = { path = "../hyper-proxy" }
 libdeadmock = { path = "../libdeadmock" }
