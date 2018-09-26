@@ -9,6 +9,7 @@
 //! `deadmock` runtime
 use clap::{App, Arg};
 use failure::Error;
+use libdeadmock::matcher::Enabled;
 use libdeadmock::{config, logging, server};
 use std::convert::TryFrom;
 use std::env;
@@ -125,9 +126,14 @@ crate fn run() -> Result<i32, Error> {
     let addr = format!("{}:{}", ip, port);
     let socket_addr = addr.parse::<SocketAddr>()?;
 
-    let handler = server::Handler::new(mappings.clone(), proxy_config.clone(), files_path.clone())
-        .stdout(process_stdout.clone())
-        .stderr(process_stderr.clone());
+    let enabled = Enabled::EXACT_URL | Enabled::EXACT_METHOD | Enabled::EXACT_ALL_HEADERS;
+    let handler = server::Handler::new(
+        enabled,
+        mappings.clone(),
+        proxy_config.clone(),
+        files_path.clone(),
+    ).stdout(process_stdout.clone())
+    .stderr(process_stderr.clone());
 
     // Run the server.
     let _ = server::run(&socket_addr, handler);
