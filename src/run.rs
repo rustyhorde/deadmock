@@ -40,7 +40,8 @@ crate fn run() -> Result<i32, Error> {
                 .long("verbose")
                 .multiple(true)
                 .help("Set the logging verbosity"),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("env_path")
                 .short("e")
                 .long("env_path")
@@ -48,7 +49,8 @@ crate fn run() -> Result<i32, Error> {
                 .value_name("ENV_PATH")
                 .default_value(&default_config_path[..])
                 .help("Specify the full path to the directory where 'env.toml' lives"),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("mappings_path")
                 .short("m")
                 .long("mappings_path")
@@ -56,38 +58,44 @@ crate fn run() -> Result<i32, Error> {
                 .value_name("MAPPINGS_PATH")
                 .default_value(&default_config_path[..])
                 .help("Specify the full path to the parent directory of your mappings"),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("files_path")
                 .short("f")
                 .long("files_path")
                 .takes_value(true)
                 .value_name("FILES_PATH")
                 .help("Specify the full path to the 'files' directory"),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("proxy")
                 .short("p")
                 .long("proxy")
                 .requires("proxy-url")
                 .help("Use a proxy"),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("proxy-url")
                 .long("proxy-url")
                 .takes_value(true)
                 .value_name("PROXY_URL")
                 .help("Your proxy url, if applicable"),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("proxy-username")
                 .long("proxy-username")
                 .takes_value(true)
                 .value_name("PROXY_USER")
                 .help("Your proxy username, if applicable"),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("proxy-password")
                 .long("proxy-password")
                 .takes_value(true)
                 .value_name("PROXY_PASS")
                 .help("Your proxy password, if applicable"),
-        ).get_matches();
+        )
+        .get_matches();
 
     // Setup the environment.
     let envs: Environments<Environment, config::Runtime> = Environments::try_from(&matches)?;
@@ -126,13 +134,18 @@ crate fn run() -> Result<i32, Error> {
     let addr = format!("{}:{}", ip, port);
     let socket_addr = addr.parse::<SocketAddr>()?;
 
-    let enabled = Enabled::EXACT_URL | Enabled::EXACT_METHOD | Enabled::EXACT_ALL_HEADERS;
+    let enabled = Enabled::EXACT_URL
+        | Enabled::PATTERN_URL
+        | Enabled::EXACT_METHOD
+        | Enabled::EXACT_HEADER
+        | Enabled::EXACT_HEADERS;
     let handler = server::Handler::new(
         enabled,
         mappings.clone(),
         proxy_config.clone(),
         files_path.clone(),
-    ).stdout(process_stdout.clone())
+    )
+    .stdout(process_stdout.clone())
     .stderr(process_stderr.clone());
 
     // Run the server.
