@@ -29,7 +29,7 @@ version = "2"
 features = ["max_level_trace", "release_max_level_trace"]
 
 [build-dependencies]
-vergen = "2"
+vergen = "3"
 
 [patch.crates-io]
 libdeadmock = { path = "../libdeadmock" }
