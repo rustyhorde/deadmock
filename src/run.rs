@@ -138,6 +138,7 @@ crate fn run() -> Result<i32, Error> {
         | Enabled::PATTERN_URL
         | Enabled::EXACT_METHOD
         | Enabled::EXACT_HEADER
+        | Enabled::PATTERN_HEADER
         | Enabled::EXACT_HEADERS;
     let handler = server::Handler::new(
         enabled,
