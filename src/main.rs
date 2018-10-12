@@ -7,7 +7,7 @@
 // modified, or distributed except according to those terms.
 
 //! `deadmock` 0.1.0
-#![feature(crate_visibility_modifier, tool_lints, try_from)]
+#![feature(crate_visibility_modifier, try_from)]
 #![deny(
     clippy::all,
     clippy::pedantic,
