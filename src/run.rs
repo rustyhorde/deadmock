@@ -137,6 +137,7 @@ crate fn run() -> Result<i32, Error> {
     let enabled = Enabled::EXACT_URL
         | Enabled::PATTERN_URL
         | Enabled::EXACT_METHOD
+        | Enabled::PATTERN_METHOD
         | Enabled::EXACT_HEADER
         | Enabled::PATTERN_HEADER
         | Enabled::EXACT_HEADERS;

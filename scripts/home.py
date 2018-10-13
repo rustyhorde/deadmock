@@ -44,6 +44,21 @@ class UserBehavior(TaskSet):
             headers = { "X-Pattern-Match": "yoda-bloda" },
             name = "Static - Header Pattern")
 
+    @task(10)
+    def post_static(self):
+        self.client.post("/method-pattern",
+            name = "Static - Method Pattern (POST)")
+
+    @task(10)
+    def put_static(self):
+        self.client.put("/method-pattern",
+            name = "Static - Method Pattern (PUT)")
+
+    @task(10)
+    def patch_static(self):
+        self.client.patch("/method-pattern",
+            name = "Static - Method Pattern (PATCH)")
+
 class WebsiteUser(HttpLocust):
     task_set = UserBehavior
     min_wait = 1000
