@@ -3,7 +3,7 @@ from locust import HttpLocust, TaskSet, task
 class UserBehavior(TaskSet):
     @task(1)
     def jozias(self):
-        self.client.get("/", name = "jasonozias.com - Get")
+        self.client.get("/", name = "Proxy - jasonozias.com")
 
     @task(10)
     def get_card_visa_static(self):
@@ -37,6 +37,12 @@ class UserBehavior(TaskSet):
     @task(10)
     def weather_static(self):
         self.client.get("/weather/45039", name = "Static - Weather")
+
+    @task(10)
+    def weather_static(self):
+        self.client.get("/header-pattern",
+            headers = { "X-Pattern-Match": "yoda-bloda" },
+            name = "Static - Header Pattern")
 
 class WebsiteUser(HttpLocust):
     task_set = UserBehavior
