@@ -41,6 +41,7 @@
 )]
 #![allow(clippy::stutter)]
 
+mod header;
 mod run;
 mod util;
 

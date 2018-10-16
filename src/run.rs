@@ -8,9 +8,12 @@
 
 //! `deadmock` runtime
 use clap::{App, Arg};
+use crate::header::header;
 use failure::Error;
 use libdeadmock::matcher::Enabled;
 use libdeadmock::{config, logging, server};
+use slog::trace;
+use slog_try::try_trace;
 use std::convert::TryFrom;
 use std::env;
 use std::net::SocketAddr;
@@ -21,7 +24,7 @@ const DEADMOCK_ENV: &str = "DMENV";
 
 /// CLI Runtime
 crate fn run() -> Result<i32, Error> {
-    server::header();
+    header();
 
     let default_config_path = if let Some(config_dir) = dirs::config_dir() {
         let prog_config_dir = config_dir.join(env!("CARGO_PKG_NAME"));
@@ -105,12 +108,6 @@ crate fn run() -> Result<i32, Error> {
     let envs: Environments<Environment, config::Runtime> = Environments::try_from(&matches)?;
     let current = envs.current_from(DEADMOCK_ENV)?;
 
-    // Setup the proxy config.
-    let proxy_config = config::Proxy::try_from(&matches)?;
-
-    // Load up the static mappings.
-    let mappings = config::Mappings::try_from(&matches)?;
-
     // Setup the logging.
     let loggers = logging::Loggers::try_from(&matches)?;
     let (stdout, stderr) = loggers.split();
@@ -118,6 +115,18 @@ crate fn run() -> Result<i32, Error> {
     // Setup logging clones to move into handlers.
     let process_stderr = stderr.clone();
     let process_stdout = stdout.clone();
+
+    try_trace!(stdout, "Environment  - Loaded");
+    try_trace!(stdout, "Loggers      - Loaded");
+
+    // Setup the proxy config.
+    let proxy_config = config::Proxy::try_from(&matches)?;
+
+    try_trace!(stdout, "Proxy Config - Loaded");
+
+    // Load up the static mappings.
+    let mappings = config::Mappings::try_from(&matches)?;
+    try_trace!(stdout, "Mappings     - Loaded");
 
     // Setup the files_path.
     let files_path = if let Some(files_path) = matches.value_of("files_path") {
@@ -127,6 +136,7 @@ crate fn run() -> Result<i32, Error> {
     } else {
         PathBuf::from("files")
     };
+    try_trace!(stdout, "Files        - Loaded");
 
     // Setup the listener.
     let ip = if let Some(ip) = current.ip() {

@@ -18,9 +18,11 @@ version = "0.1.0"
 
 [dependencies]
 clap = "2"
+colored = "1"
 dirs = "1"
 failure = "0"
 libdeadmock = "0"
+rand = "0"
 slog-try = "0"
 tomlenv = "0"
 
