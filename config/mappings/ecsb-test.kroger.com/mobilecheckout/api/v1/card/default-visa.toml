@@ -1,0 +1,17 @@
+name = "Get Visa"
+priority = 2
+
+[request]
+method = "GET"
+url = "/mobilecheckout/api/v1/card"
+
+[[request.headers]]
+key = "X-Card-Type"
+value = "VS"
+
+[response]
+body_file_name = "default-visa-response.json"
+
+[[response.headers]]
+key = "Content-Type"
+value = "application/json"

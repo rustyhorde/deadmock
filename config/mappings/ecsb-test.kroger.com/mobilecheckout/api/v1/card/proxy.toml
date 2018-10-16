@@ -1,0 +1,17 @@
+name = "Proxy - GET Card"
+priority = 10
+
+[request]
+method = "GET"
+url = "/mobilecheckout/api/v1/card/b14d93bd-67c2-aa1b-c973-f6b084403e3e"
+
+[response]
+proxy_base_url = "http://ecsb-test.kroger.com"
+
+[[response.additional_proxy_request_headers]]
+key = "User-Agent"
+value = "krogerco/15.0/iOS"
+
+[[response.additional_proxy_request_headers]]
+key = "Authorization"
+value = "Basic b3ppYXNAdGVzdC5jb206cGFzc3dvcmQx"

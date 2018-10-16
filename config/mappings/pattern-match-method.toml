@@ -1,0 +1,13 @@
+name = "Pattern Match - Method (/method-pattern)"
+priority = 1
+
+[request]
+url = "/method-pattern"
+method_pattern ="P.*"
+
+[response]
+body_file_name = "method-pattern-match-response.json"
+
+[[response.headers]]
+key = "Content-Type"
+value = "application/json"

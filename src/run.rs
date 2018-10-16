@@ -17,6 +17,8 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use tomlenv::{Environment, Environments};
 
+const DEADMOCK_ENV: &str = "DMENV";
+
 /// CLI Runtime
 crate fn run() -> Result<i32, Error> {
     server::header();
@@ -29,6 +31,8 @@ crate fn run() -> Result<i32, Error> {
     } else {
         ".".to_string()
     };
+
+    println!("Default Config Path: {}", default_config_path);
 
     let matches = App::new(env!("CARGO_PKG_NAME"))
         .version(env!("VERGEN_SEMVER"))
@@ -99,7 +103,7 @@ crate fn run() -> Result<i32, Error> {
 
     // Setup the environment.
     let envs: Environments<Environment, config::Runtime> = Environments::try_from(&matches)?;
-    let current = envs.current()?;
+    let current = envs.current_from(DEADMOCK_ENV)?;
 
     // Setup the proxy config.
     let proxy_config = config::Proxy::try_from(&matches)?;

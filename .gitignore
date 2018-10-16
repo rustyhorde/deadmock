@@ -1,6 +1,3 @@
-# Project
-config
-
 # Rust
 /target
 **/*.rs.bk
