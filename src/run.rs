@@ -35,8 +35,6 @@ crate fn run() -> Result<i32, Error> {
         ".".to_string()
     };
 
-    println!("Default Config Path: {}", default_config_path);
-
     let matches = App::new(env!("CARGO_PKG_NAME"))
         .version(env!("VERGEN_SEMVER"))
         .author(env!("CARGO_PKG_AUTHORS"))
@@ -116,6 +114,7 @@ crate fn run() -> Result<i32, Error> {
     let process_stderr = stderr.clone();
     let process_stdout = stdout.clone();
 
+    try_trace!(stdout, "Default Config Path: {}", default_config_path);
     try_trace!(stdout, "Environment  - Loaded");
     try_trace!(stdout, "Loggers      - Loaded");
 
