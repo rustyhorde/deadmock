@@ -120,7 +120,6 @@ crate fn run() -> Result<i32, Error> {
 
     // Setup the proxy config.
     let proxy_config = config::Proxy::try_from(&matches)?;
-
     try_trace!(stdout, "Proxy Config - Loaded");
 
     // Load up the static mappings.
