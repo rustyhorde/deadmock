@@ -17,7 +17,6 @@ use slog_try::try_trace;
 use std::convert::TryFrom;
 use std::env;
 use std::net::SocketAddr;
-use std::path::PathBuf;
 use tomlenv::{Environment, Environments};
 
 const DEADMOCK_ENV: &str = "DMENV";
@@ -70,7 +69,8 @@ crate fn run() -> Result<i32, Error> {
                 .long("files_path")
                 .takes_value(true)
                 .value_name("FILES_PATH")
-                .help("Specify the full path to the 'files' directory"),
+                .default_value(&default_config_path[..])
+                .help("Specify the full path to the parent directory of your files"),
         )
         .arg(
             Arg::with_name("proxy")
@@ -124,17 +124,11 @@ crate fn run() -> Result<i32, Error> {
     try_trace!(stdout, "Proxy Config - Loaded");
 
     // Load up the static mappings.
-    let mappings = config::Mappings::try_from(&matches)?;
+    let mappings_config = config::Mappings::try_from(&matches)?;
     try_trace!(stdout, "Mappings     - Loaded");
 
-    // Setup the files_path.
-    let files_path = if let Some(files_path) = matches.value_of("files_path") {
-        PathBuf::from(files_path)
-    } else if let Some(config_path) = dirs::config_dir() {
-        config_path.join(env!("CARGO_PKG_NAME")).join("files")
-    } else {
-        PathBuf::from("files")
-    };
+    // Setup the files config.
+    let files_config = config::Files::try_from(&matches)?;
     try_trace!(stdout, "Files        - Loaded");
 
     // Setup the listener.
@@ -156,12 +150,12 @@ crate fn run() -> Result<i32, Error> {
         | Enabled::EXACT_HEADERS;
     let handler = server::Handler::new(
         enabled,
-        mappings.clone(),
+        mappings_config.clone(),
         proxy_config.clone(),
-        files_path.clone(),
+        files_config.path().clone(),
     )
-    .stdout(process_stdout.clone())
-    .stderr(process_stderr.clone());
+    .stdout(process_stdout)
+    .stderr(process_stderr);
 
     // Run the server.
     let _ = server::run(&socket_addr, handler);
