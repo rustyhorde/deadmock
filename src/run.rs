@@ -7,7 +7,7 @@
 // modified, or distributed except according to those terms.
 
 //! `deadmock` runtime
-use clap::{App, Arg};
+use clap::{App, Arg, ArgMatches};
 use crate::header::header;
 use failure::Error;
 use libdeadmock::matcher::Enabled;
@@ -73,8 +73,26 @@ crate fn run() -> Result<i32, Error> {
                 .help("Specify the full path to the parent directory of your files"),
         )
         .arg(
-            Arg::with_name("proxy")
+            Arg::with_name("all")
+                .short("a")
+                .long("all")
+                .conflicts_with_all(&["exact", "pattern", "url", "method", "header", "headers"])
+                .help("Enable all of the matchers."),
+        )
+        .arg(
+            Arg::with_name("exact")
+                .short("e")
+                .long("exact")
+                .help("Enable all of the exact matchers."),
+        )
+        .arg(
+            Arg::with_name("pattern")
                 .short("p")
+                .long("pattern")
+                .help("Enable all of the pattern matchers."),
+        )
+        .arg(
+            Arg::with_name("proxy")
                 .long("proxy")
                 .requires("proxy-url")
                 .help("Use a proxy"),
@@ -100,7 +118,7 @@ crate fn run() -> Result<i32, Error> {
                 .value_name("PROXY_PASS")
                 .help("Your proxy password, if applicable"),
         )
-        .get_matches();
+        .get_matches_safe()?;
 
     // Setup the environment.
     let envs: Environments<Environment, config::Runtime> = Environments::try_from(&matches)?;
@@ -140,13 +158,10 @@ crate fn run() -> Result<i32, Error> {
     let addr = format!("{}:{}", ip, port);
     let socket_addr = addr.parse::<SocketAddr>()?;
 
-    let enabled = Enabled::EXACT_URL
-        | Enabled::PATTERN_URL
-        | Enabled::EXACT_METHOD
-        | Enabled::PATTERN_METHOD
-        | Enabled::EXACT_HEADER
-        | Enabled::PATTERN_HEADER
-        | Enabled::EXACT_HEADERS;
+    // Enable the request matchers (all by default)
+    let enabled = enable_matchers(&matches);
+    try_trace!(stdout, "Enabled Matchers: {}", enabled);
+
     let handler = server::Handler::new(
         enabled,
         mappings_config.clone(),
@@ -160,4 +175,107 @@ crate fn run() -> Result<i32, Error> {
     let _ = server::run(&socket_addr, handler);
 
     Ok(0)
+}
+
+fn enable_matchers(matches: &ArgMatches<'_>) -> Enabled {
+    if matches.is_present("all") {
+        Enabled::all()
+    } else {
+        let mut sub_enabled = Enabled::empty();
+
+        if matches.is_present("exact") {
+            sub_enabled |= Enabled::exact()
+        }
+
+        if matches.is_present("pattern") {
+            sub_enabled |= Enabled::pattern()
+        }
+
+        // Default to all if nothing is set so far.
+        if sub_enabled.is_empty() {
+            sub_enabled |= Enabled::all()
+        }
+
+        sub_enabled
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::enable_matchers;
+    use clap::{App, Arg};
+    use libdeadmock::matcher::Enabled;
+
+    fn test_cli<'a, 'b>() -> App<'a, 'b> {
+        App::new(env!("CARGO_PKG_NAME"))
+            .arg(
+                Arg::with_name("all")
+                    .short("a")
+                    .long("all")
+                    .conflicts_with_all(&["exact", "pattern", "url", "method", "header", "headers"])
+                    .help("Enable all of the matchers."),
+            )
+            .arg(
+                Arg::with_name("exact")
+                    .short("e")
+                    .long("exact")
+                    .help("Enable all of the exact matchers."),
+            )
+            .arg(
+                Arg::with_name("pattern")
+                    .short("p")
+                    .long("pattern")
+                    .help("Enable all of the pattern matchers."),
+            )
+    }
+
+    #[test]
+    fn pattern_matchers() {
+        let args = vec!["test", "-p"];
+        let matches = test_cli().get_matches_from(args);
+        let enabled = enable_matchers(&matches);
+
+        assert!(!enabled.is_empty());
+        assert_eq!(enable_matchers(&matches), Enabled::pattern());
+    }
+
+    #[test]
+    fn exact_matchers() {
+        let args = vec!["test", "-e"];
+        let matches = test_cli().get_matches_from(args);
+        let enabled = enable_matchers(&matches);
+
+        assert!(!enabled.is_empty());
+        assert_eq!(enable_matchers(&matches), Enabled::exact());
+    }
+
+    #[test]
+    fn all_matchers() {
+        let args = vec!["test", "-a"];
+        let matches = test_cli().get_matches_from(args);
+        let enabled = enable_matchers(&matches);
+
+        assert!(!enabled.is_empty());
+        assert_eq!(enable_matchers(&matches), Enabled::all());
+    }
+
+    #[test]
+    fn default_matchers() {
+        let args = vec!["test"];
+        let matches = test_cli().get_matches_from(args);
+        let enabled = enable_matchers(&matches);
+
+        assert!(!enabled.is_empty());
+        assert_eq!(enable_matchers(&matches), Enabled::all());
+    }
+
+    #[test]
+    fn error_on_conflict() {
+        let args = vec!["test", "-ap"];
+        assert!(test_cli().get_matches_from_safe(args).is_err());
+        let args = vec!["test", "-ae"];
+        assert!(test_cli().get_matches_from_safe(args).is_err());
+        let args = vec!["test", "-ape"];
+        assert!(test_cli().get_matches_from_safe(args).is_err());
+    }
 }

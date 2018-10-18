@@ -1,3 +1,6 @@
+# Symlink to config
+config
+
 # Rust
 /target
 **/*.rs.bk

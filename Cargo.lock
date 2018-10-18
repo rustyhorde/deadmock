@@ -211,7 +211,7 @@ dependencies = [
  "colored 1.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "dirs 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "libdeadmock 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libdeadmock 0.1.5",
  "rand 0.5.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "slog 2.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "slog-try 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -450,7 +450,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "libdeadmock"
 version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "bitflags 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "bytes 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1461,7 +1460,6 @@ dependencies = [
 "checksum lazy_static 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "ca488b89a5657b0a2ecd45b95609b3e848cf1755da332a0da46e2b2b1cb371a7"
 "checksum lazycell 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "ddba4c30a78328befecec92fc94970e53b3ae385827d28620f0f5bb2493081e0"
 "checksum libc 0.2.43 (registry+https://github.com/rust-lang/crates.io-index)" = "76e3a3ef172f1a0b9a9ff0dd1491ae5e6c948b94479a3021819ba7d860c8645d"
-"checksum libdeadmock 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)" = "1431d6ccb569af3c27854d41471d850ec3fceb2e4b303c7d283ed646ee26b075"
 "checksum libeither 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3fcad07a1207be50d37c9aa4a4bc9f8df18d652c211a9afa1766145e326313df"
 "checksum lock_api 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)" = "775751a3e69bde4df9b38dd00a1b5d6ac13791e4223d4a0506577f0dd27cfb7a"
 "checksum log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)" = "d4fcce5fa49cc693c312001daf1d13411c4a5283796bac1084299ea3e567113f"

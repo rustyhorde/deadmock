@@ -53,9 +53,18 @@ class UserBehavior(TaskSet):
 
     @task(10)
     def pattern_match_header(self):
-        self.client.get("/header-pattern",
+        self.client.get("/any-uri",
             headers = { "X-Pattern-Match": "yoda-bloda" },
             name = "Pattern Match (Header)")
+
+    @task(10)
+    def pattern_match_headers(self):
+        self.client.get("/any-uri",
+            headers = {
+                "X-Correlation-Id": "12345",
+                "X-Loyalty-Id": "abcd-1234"
+            },
+            name = "Pattern Match (Headers)")
 
     @task(10)
     def post_static(self):
