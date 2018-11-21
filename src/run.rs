@@ -7,8 +7,8 @@
 // modified, or distributed except according to those terms.
 
 //! `deadmock` runtime
-use crate::header::header;
 use clap::{App, Arg, ArgMatches};
+use crate::header::header;
 use failure::Error;
 use libdeadmock::matcher::Enabled;
 use libdeadmock::{config, logging, server};
