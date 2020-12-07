@@ -161,28 +161,36 @@ checksum = "e0dcbc35f504eb6fc275a6d20e4ebcda18cf50d40ba6fabff8c711fa16cb3b16"
 
 [[package]]
 name = "cached"
-version = "0.21.0"
+version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db101a7a0823fa3fada8def3e7c72a55a5b75eb9997a8108f04eace519a21d13"
+checksum = "37bc788b1f75520b1425759a82bbf66b70e005969bb6116e1025e3f654d3850a"
 dependencies = [
  "async-mutex",
  "async-trait",
  "cached_proc_macro",
+ "cached_proc_macro_types",
  "futures 0.3.8",
  "once_cell",
 ]
 
 [[package]]
 name = "cached_proc_macro"
-version = "0.4.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8b23e8d77fb99d0bc30e6602e32a5a8dc2195311813051ea475ae16bd338f06"
+checksum = "bf857ae42d910aede5c5186e62684b0d7a597ce2fe3bd14448ab8f7ef439848c"
 dependencies = [
  "async-mutex",
+ "cached_proc_macro_types",
  "darling",
  "quote",
  "syn",
 ]
+
+[[package]]
+name = "cached_proc_macro_types"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3a4f925191b4367301851c6d99b09890311d74b0d43f274c0b34c86d308a3663"
 
 [[package]]
 name = "cc"
@@ -797,9 +805,9 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
 name = "libc"
-version = "0.2.80"
+version = "0.2.81"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d58d1b70b004888f764dfbf6a26a3b0342a1632d33968e4a179d8011c760614"
+checksum = "1482821306169ec4d07f6aca392a4681f66c75c9918aa49641a2595db64053cb"
 
 [[package]]
 name = "libdeadmock"
@@ -1485,15 +1493,15 @@ checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 
 [[package]]
 name = "serde"
-version = "1.0.117"
+version = "1.0.118"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b88fa983de7720629c9387e9f517353ed404164b1e482c970a90c1a4aaf7dc1a"
+checksum = "06c64263859d87aa2eb554587e2d23183398d617427327cf2b3d0ed8c69e4800"
 
 [[package]]
 name = "serde_derive"
-version = "1.0.117"
+version = "1.0.118"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbd1ae72adb44aab48f325a02444a5fc079349a8d804c1fc922aed3f7454c74e"
+checksum = "c84d3526699cd55261af4b941e4e725444df67aa4f9e6a3564f18030d12672df"
 dependencies = [
  "proc-macro2",
  "quote",
